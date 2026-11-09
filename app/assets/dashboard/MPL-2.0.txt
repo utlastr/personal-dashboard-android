@@ -1,0 +1,5 @@
+Mozilla Public License Version 2.0
+
+The ActivityWatch-derived code in this application is distributed under the
+MPL-2.0 license. The complete license text is available from:
+https://www.mozilla.org/en-US/MPL/2.0/

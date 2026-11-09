@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="local.personaldashboard.mobile.tests">
+    <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="35"/>
+    <application android:label="Dashboard Runtime Tests"/>
+    <instrumentation android:name="local.personaldashboard.mobile.RuntimeTests" android:targetPackage="local.personaldashboard.mobile"/>
+</manifest>

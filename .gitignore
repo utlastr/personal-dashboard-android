@@ -1,0 +1,6 @@
+.local/
+output/
+app/lib/
+vendor/releases/
+__pycache__/
+vendor/aw-android/
