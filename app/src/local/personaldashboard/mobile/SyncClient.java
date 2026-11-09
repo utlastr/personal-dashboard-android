@@ -48,7 +48,6 @@ final class SyncClient {
             JSONArray pending;
             do {
                 pending=store.pending("synced",300);
-                if(pending.length()==0) break;
                 JSONObject response=request(context,"/mobile/v1/sync",new JSONObject().put("device",Collector.device(context))
                     .put("name",Collector.prefs(context).getString("name",android.os.Build.MODEL))
                     .put("role",Collector.prefs(context).getString("role","personal")).put("sessions",pending));
@@ -56,8 +55,7 @@ final class SyncClient {
                 for(int i=0;i<pending.length();i++) store.marked(pending.getJSONObject(i).getString("id"),"synced");
             } while(pending.length()==300);
         }
-        JSONObject shared=request(context,"/mobile/v1/state",null);
         Collector.prefs(context).edit().putLong("synced",System.currentTimeMillis())
-            .putString("shared",shared.toString()).putString("error","").apply();
+            .remove("shared").putString("error","").apply();
     }
 }

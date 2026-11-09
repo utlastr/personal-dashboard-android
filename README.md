@@ -3,21 +3,20 @@
 Android companion for the local Personal Dashboard.
 
 The mobile collector reuses the ActivityWatch Android data engine and session
-parsing approach under MPL-2.0, while the mobile interface and device-purpose
-split are Personal Dashboard code. A phone keeps sessions locally, mirrors
+parsing approach under MPL-2.0, while the mobile interface and device identity
+are Personal Dashboard code. A phone keeps sessions locally, mirrors
 them into its local ActivityWatch store, and can upload them to the PC service
 when a paired server is configured.
 
-The app supports two independent labels:
-
-- device role: `work` or `personal`;
-- session purpose: `work` or `personal`, changed from the app and applied at
-  session boundaries. This lets the same app, such as Douyin, appear in both
-  work and personal summaries.
+Each phone is either a work phone or a personal phone. This is a device
+identity, not a session or application category. The phone shows only its own
+daily usage total, app usage and recent records. Existing purpose labels are
+ignored in summaries; historical records and sync IDs are preserved.
+The PC overview displays the PC, work phone and personal phone side by side.
 
 Build output:
 
-`output/PersonalDashboard-0.1.3.apk` (Android 9+, ARM64 and x86_64)
+`output/PersonalDashboard-0.1.4.apk` (Android 9+, ARM64 and x86_64)
 
 The PC sync service is in `tools/mobile_service.py`. Data sync requires pairing.
 Updates are independent and use public GitHub Releases in
@@ -30,10 +29,8 @@ may change. Android usage-access permission must be enabled manually.
 
 Collection runs on opening the app and with Android JobScheduler (minimum
 15 minutes, subject to Android battery restrictions). Closed sessions only
-are committed. The current purpose applies to future intervals; this version
-does not automatically distinguish Douyin videos from Douyin mini games.
-Switch purpose before starting work or leisure. The phone shows local data
-and cached summaries of the other phones; the PC receives phone buckets in
+are committed. Apps are not split into work and personal categories.
+The phone shows local data; the PC receives phone buckets in
 its ActivityWatch dashboard. PC activity history is not downloaded to phones.
 
 Updates use the official GitHub Releases API for both metadata and asset

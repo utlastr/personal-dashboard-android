@@ -135,7 +135,6 @@ public final class MainActivity extends Activity {
                     .put("role",p.getString("role","personal")).put("server",p.getString("server",""))
                     .put("paired",!p.getString("token","").isEmpty()).put("version",Updates.NAME)
                     .put("synced",p.getLong("synced",0)).put("collected",p.getLong("collected",0))
-                    .put("shared",new JSONObject(p.getString("shared","{}")))
                     .put("message",operation).put("update",Updates.state(MainActivity.this)).toString();
             } catch(Exception error) { return "{\"message\":"+JSONObject.quote(error.toString())+"}"; }
         }
@@ -144,10 +143,6 @@ public final class MainActivity extends Activity {
         }
         @JavascriptInterface public void refresh() { MainActivity.this.refresh(false); }
         @JavascriptInterface public void checkUpdate() { MainActivity.this.checkUpdate(true); }
-        @JavascriptInterface public void mode(String purpose) {
-            try(Store store=new Store(MainActivity.this)) { store.mode(purpose); MainActivity.this.refresh(false); }
-            catch(Exception error) { operation=error.getMessage(); }
-        }
         @JavascriptInterface public String save(String data) {
             try {
                 JSONObject config=new JSONObject(data);

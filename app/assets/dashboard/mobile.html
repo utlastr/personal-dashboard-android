@@ -12,22 +12,18 @@
 <p id="home-update-status" role="status">等待检查</p>
 <div class="update-actions"><button id="home-check-update">检查更新</button><button id="home-install" hidden>安装更新</button></div>
 <p id="home-update-checked"></p>
-<div class="section-head"><h2>当前用途</h2><span id="current-purpose"></span></div>
-<div class="segmented" aria-label="当前用途"><button id="work">工作</button><button id="personal">日常</button></div>
-<div class="metrics"><div><span>今日工作</span><strong id="work-time">0 分钟</strong><i class="work"></i></div><div><span>今日日常</span><strong id="personal-time">0 分钟</strong><i class="personal"></i></div></div>
+<div class="metrics"><div><span>本机今日使用</span><strong id="total-time">0 分钟</strong></div></div>
 <div class="section-head"><h2>应用使用</h2><span>今天 · 已结束的会话</span></div>
 <div id="apps" class="rows"></div>
 <div class="section-head"><h2>同步状态</h2><span id="sync-state"></span></div>
 <p id="sync-detail"></p>
-<div class="section-head"><h2>已同步设备</h2><span id="shared-date"></span></div>
-<div id="shared-devices" class="rows"></div>
 </section>
-<section id="timeline" hidden><div class="section-head"><h2>最近记录</h2><span>按用途切分</span></div><div id="sessions" class="rows"></div><button id="export">导出记录</button></section>
+<section id="timeline" hidden><div class="section-head"><h2>本机最近记录</h2></div><div id="sessions" class="rows"></div><button id="export">导出记录</button></section>
 <section id="settings" hidden>
 <h2>设备</h2>
 <form id="config">
 <label for="name">设备名称</label><input id="name" required maxlength="80">
-<label for="role">设备用途</label><select id="role"><option value="personal">日常机</option><option value="work">工作机</option></select>
+<label for="role">这台手机是</label><select id="role"><option value="personal">日常机</option><option value="work">工作机</option></select>
 <h2>连接电脑</h2>
 <label for="server">服务地址</label><input id="server" type="url" placeholder="http://192.168.1.244:5668" autocomplete="off">
 <label for="token">配对码</label><input id="token" type="password" placeholder="输入电脑端提供的配对码" autocomplete="off">

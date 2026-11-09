@@ -9,13 +9,13 @@
   };
   const date = value => value ? new Date(value).toLocaleString('zh-CN', {hour12: false}) : '尚未同步';
   const text = (id, value) => { $(id).textContent = value; };
-  function row(app, purpose, detail, ms, pkg) {
+  function row(app, detail, ms, pkg) {
     const root = document.createElement('div');
     root.className = 'row';
     const info = document.createElement('div');
     info.className = 'details';
     const title = document.createElement('strong'); title.textContent = app;
-    const caption = document.createElement('small'); caption.textContent = `${purpose === 'work' ? '工作' : '日常'} · ${detail}`;
+    const caption = document.createElement('small'); caption.textContent = detail;
     info.append(title, caption);
     const time = document.createElement('span'); time.className = 'duration'; time.textContent = duration(ms);
     if (pkg) {
@@ -30,29 +30,21 @@
     const state = JSON.parse(bridge.state());
     text('device-name', state.name || '手机');
     text('role-badge', state.role === 'work' ? '工作机' : '日常机');
-    text('current-purpose', state.purpose === 'work' ? '工作记录中' : '日常记录中');
     $('permission').hidden = !!state.permission;
     $('message').hidden = !state.message; text('message', state.message || '');
-    text('work-time', duration(state.work || 0)); text('personal-time', duration(state.personal || 0));
-    for (const mode of ['work', 'personal']) $(mode).classList.toggle('active', state.purpose === mode);
+    text('total-time', duration(state.total || 0));
     $('apps').replaceChildren();
-    for (const app of state.apps || []) $('apps').append(row(app.app, app.purpose, app.package, app.ms, app.package));
+    for (const app of state.apps || []) $('apps').append(row(app.app, app.package, app.ms, app.package));
     if (!state.apps?.length) { $('apps').className = 'rows empty'; text('apps', state.permission ? '今天暂无已结束的应用会话' : '开启权限后显示应用记录'); }
     else $('apps').className = 'rows';
     $('sessions').replaceChildren();
-    for (const session of state.recent || []) $('sessions').append(row(session.app, session.purpose, date(session.start), session.end - session.start));
+    for (const session of state.recent || []) $('sessions').append(row(session.app, date(session.start), session.end - session.start));
     if (!state.recent?.length) text('sessions', '暂无记录');
     text('sync-state', state.server ? `${state.pending || 0} 条待上传` : '尚未连接');
     text('sync-detail', state.server ? `上次同步：${date(state.synced)}` : '记录保存在本机，连接电脑后自动上传。');
-    text('shared-date', state.shared?.updated ? date(state.shared.updated) : '');
-    $('shared-devices').replaceChildren();
-    for (const device of state.shared?.devices || []) {
-      $('shared-devices').append(row(device.name, device.purpose, device.role === 'work' ? '工作机' : '日常机', device.ms));
-    }
-    if (!state.shared?.devices?.length) text('shared-devices', '暂无已同步的手机记录');
     text('collect-state', state.collected ? `上次采集：${date(state.collected)}` : '等待采集');
-    text('version', `Personal Dashboard ${state.version || '0.1.3'} · GitHub`);
-    text('home-version', state.version || '0.1.3');
+    text('version', `Personal Dashboard ${state.version || '0.1.4'} · GitHub`);
+    text('home-version', state.version || '0.1.4');
     for (const prefix of ['', 'home-']) {
       text(`${prefix}update-status`, state.update?.status || '等待每日检查');
       $(`${prefix}check-update`).disabled = !!state.update?.busy;
@@ -71,7 +63,6 @@
     for (const section of ['overview', 'timeline', 'settings']) $(section).hidden = section !== tab.dataset.page;
     for (const button of document.querySelectorAll('[data-page]')) button.classList.toggle('active', button === tab);
   };
-  for (const mode of ['work', 'personal']) $(mode).onclick = () => { bridge?.mode(mode); render(); };
   $('grant').onclick = () => bridge?.permission();
   $('refresh').onclick = () => bridge?.refresh();
   $('check-update').onclick = $('home-check-update').onclick = () => { bridge?.checkUpdate(); render(); };

@@ -63,6 +63,11 @@ def init_db() -> None:
                 forwarded INTEGER DEFAULT 0, PRIMARY KEY(device,id)
             )"""
         )
+        db.execute("""CREATE TABLE IF NOT EXISTS devices (
+            device TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL,
+            updated INTEGER NOT NULL, metadata_pending INTEGER DEFAULT 1)""")
+        db.execute("""INSERT OR IGNORE INTO devices(device,name,role,updated)
+            SELECT s.device,s.name,s.role,MAX(s.received) FROM sessions s GROUP BY s.device""")
     token()
 
 
@@ -106,6 +111,7 @@ def mirror_event(row: dict) -> None:
             "purpose": row["purpose"],
             "device_role": row["role"],
             "device": row["device"],
+            "device_name": row["name"],
             "session_id": row["id"],
         },
     }
@@ -139,6 +145,10 @@ def forward_pending():
 
 def retry_worker():
     while True:
+        try:
+            forward_devices()
+        except Exception:
+            pass
         try:
             forward_pending()
         except Exception:
@@ -179,6 +189,11 @@ def accept(payload: dict) -> int:
         raise ValueError("invalid device information")
     accepted = []
     with database() as db:
+        db.execute("""INSERT INTO devices(device,name,role,updated) VALUES(?,?,?,?)
+            ON CONFLICT(device) DO UPDATE SET name=excluded.name,role=excluded.role,
+            updated=excluded.updated,metadata_pending=CASE
+                WHEN devices.name!=excluded.name OR devices.role!=excluded.role THEN 1
+                ELSE devices.metadata_pending END""", (device,name,role,int(time.time()*1000)))
         for raw in sessions:
             if not isinstance(raw, dict):
                 raise ValueError("invalid session")
@@ -190,6 +205,27 @@ def accept(payload: dict) -> int:
             if inserted:
                 accepted.append(row)
     return len(sessions)
+
+
+def forward_devices():
+    with database() as db:
+        db.row_factory=sqlite3.Row
+        devices=db.execute("SELECT * FROM devices WHERE metadata_pending=1").fetchall()
+    if not devices:
+        return
+    bucket="personal-dashboard-devices"
+    if bucket not in aw_request("GET","/api/0/buckets/"):
+        aw_request("POST","/api/0/buckets/"+bucket,{
+            "type":"personal-dashboard.devices","hostname":"unknown","client":"personal-dashboard-mobile"})
+    for device in devices:
+        aw_request("POST","/api/0/buckets/"+bucket+"/events",[{
+            "timestamp":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "duration":0,
+            "data":{"device":device["device"],"name":device["name"],"role":device["role"]},
+        }])
+        with database() as db:
+            db.execute("UPDATE devices SET metadata_pending=0 WHERE device=? AND updated=?",
+                       (device["device"],device["updated"]))
 
 
 def release():
@@ -208,9 +244,10 @@ def shared_state():
     now = int(time.time()*1000)
     with database() as db:
         db.row_factory=sqlite3.Row
-        rows=db.execute("""SELECT device,name,role,purpose,
-            SUM(MIN(end,?)-MAX(start,?)) ms FROM sessions
-            WHERE end>? AND start<? AND end>start GROUP BY device,purpose""",
+        rows=db.execute("""SELECT d.device,d.name,d.role,
+            COALESCE(SUM(MIN(s.end,?)-MAX(s.start,?)),0) ms FROM devices d
+            LEFT JOIN sessions s ON s.device=d.device AND s.end>? AND s.start<? AND s.end>s.start
+            GROUP BY d.device""",
             (now,today,today,now)).fetchall()
         pending=db.execute("SELECT COUNT(*) FROM sessions WHERE forwarded=0").fetchone()[0]
     return {"devices":[dict(row) for row in rows],"pending":pending,"updated":int(time.time()*1000)}

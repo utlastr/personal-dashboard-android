@@ -117,8 +117,34 @@ class ServiceTests(unittest.TestCase):
              "pkg": "app", "app": "App", "purpose": "personal"},
         ]
         service.accept(self.payload)
-        totals={row["purpose"]:row["ms"] for row in service.shared_state()["devices"]}
-        self.assertEqual(totals, {"personal": 120000, "work": 30000})
+        devices=service.shared_state()["devices"]
+        self.assertEqual(len(devices),1)
+        self.assertEqual(devices[0]["ms"],150000)
+        self.assertNotIn("purpose",devices[0])
+
+    def test_device_role_changes_without_rewriting_or_reuploading_sessions(self):
+        service.accept(self.payload)
+        self.payload.update(role="work",name="Work phone",sessions=[])
+        service.accept(self.payload)
+        devices=service.shared_state()["devices"]
+        self.assertEqual(len(devices),1)
+        self.assertEqual((devices[0]["role"],devices[0]["name"]),("work","Work phone"))
+        self.assertEqual(self.count(),1)
+        with patch.object(service,"aw_request",side_effect=[{},None,None]) as request:
+            service.forward_devices()
+            event=request.call_args_list[-1].args[2][0]
+            self.assertEqual(event["data"],{"device":"android-test1","name":"Work phone","role":"work"})
+        with patch.object(service,"aw_request") as request:
+            service.forward_devices()
+            request.assert_not_called()
+
+    def test_empty_phone_registered_and_two_roles_stay_separate(self):
+        self.payload["sessions"]=[]
+        service.accept(self.payload)
+        self.payload.update(device="android-work",role="work",name="Work")
+        service.accept(self.payload)
+        self.assertEqual({row["role"] for row in service.shared_state()["devices"]},{"work","personal"})
+        self.assertEqual([row["ms"] for row in service.shared_state()["devices"]],[0,0])
 
 
 if __name__ == "__main__":

@@ -31,16 +31,17 @@ public final class RuntimeTests extends Instrumentation {
         long day=1700006400000L,minute=60000,hour=3600000,now=day+12*hour;
         try(Store store=new Store(context,null)) {
             add(store,"a1","douyin","personal",day+hour,day+hour+5*minute);
-            add(store,"a2","douyin","personal",day+11*hour,day+11*hour+5*minute);
+            add(store,"a2","douyin","work",day+11*hour,day+11*hour+5*minute);
             add(store,"b","work","work",day-hour,day+5*minute);
             add(store,"c","future-end","work",now-minute,now+minute);
             add(store,"d","yesterday","work",day-hour,day-minute);
             add(store,"e","future-start","personal",now+minute,now+2*minute);
             JSONObject totals=store.summary(now,day);
-            check(totals.getLong("personal")==10*minute,"two separate sessions must sum to 10 minutes");
-            check(totals.getLong("work")==6*minute,"midnight and future end clipping");
+            check(totals.getLong("total")==16*minute,"local phone total with midnight and future clipping");
+            check(!totals.has("work")&&!totals.has("personal")&&!totals.has("purpose"),"no purpose categories");
             check(totals.getJSONArray("apps").length()==3,"exclude yesterday and future sessions");
-            check(store.summary(now,now-1000).getLong("work")==1000,"different daily boundary");
+            check(totals.getJSONArray("apps").getJSONObject(0).getLong("ms")==10*minute,"legacy purposes merge into one app");
+            check(store.summary(now,now-1000).getLong("total")==1000,"different daily boundary");
         }
         String json;
         try(InputStream input=getContext().getAssets().open("phone-events.json");
@@ -68,8 +69,7 @@ public final class RuntimeTests extends Instrumentation {
                 if(pkg.equals("com.ss.android.ugc.aweme")) douyin+=duration;
             }
             JSONObject totals=store.summary(now,day);
-            check(totals.getLong("work")==expectedWork,"real phone work totals");
-            check(totals.getLong("personal")==expectedPersonal,"real phone personal totals");
+            check(totals.getLong("total")==expectedWork+expectedPersonal,"real phone total across legacy labels");
             check(expectedWork+expectedPersonal<=now-day,"one phone cannot exceed elapsed day");
             result.putString("phoneReplay","PASS "+events.length()+" events; workMs="+expectedWork
                 +"; personalMs="+expectedPersonal+"; douyinMs="+douyin);
@@ -124,8 +124,16 @@ public final class RuntimeTests extends Instrumentation {
                 store.insert(s,"Runtime test","work"); store.insert(s,"Runtime test","work");
                 try(Cursor cursor=store.getReadableDatabase().rawQuery("SELECT COUNT(*),SUM(end-start),COUNT(DISTINCT purpose) FROM sessions WHERE pkg='test.runtime'",null)) {
                     cursor.moveToFirst();
-                    check(cursor.getInt(0)==2 && cursor.getLong(1)==10000 && cursor.getInt(2)==2,"purpose split and dedupe");
+                    check(cursor.getInt(0)==1 && cursor.getLong(1)==10000 && cursor.getInt(2)==1,"device role only; legacy modes ignored; dedupe");
                 }
+                add(store,"legacy-a","test.legacy","personal",start,start+5000);
+                add(store,"legacy-b","test.legacy","work",start+5000,start+10000);
+                store.insert(new ForegroundParser.Session("test.legacy","Activity",start,start+10000),"Legacy","personal");
+                try(Cursor cursor=store.getReadableDatabase().rawQuery("SELECT COUNT(*),SUM(end-start) FROM sessions WHERE pkg='test.legacy'",null)) {
+                    cursor.moveToFirst();
+                    check(cursor.getInt(0)==2 && cursor.getLong(1)==10000,"upgrade recollection preserves old split IDs without duplication");
+                }
+                store.getWritableDatabase().delete("sessions","pkg=?",new String[]{"test.legacy"});
             }
             check(Collector.allowed(c),"usage permission");
             Collector.collect(c);
@@ -163,7 +171,7 @@ public final class RuntimeTests extends Instrumentation {
             for(int i=0;i<20;i++) {
                 CountDownLatch done=new CountDownLatch(1);
                 runOnMainSync(()->web.evaluateJavascript(
-                    "document.documentElement && JSON.stringify({version:JSON.parse(Dashboard.state()).version,heading:document.querySelector('h1')?.textContent,update:!!document.querySelector('#home-check-update'),overflow:document.documentElement.scrollWidth>innerWidth})",
+                    "document.documentElement && JSON.stringify({version:JSON.parse(Dashboard.state()).version,heading:document.querySelector('h1')?.textContent,update:!!document.querySelector('#home-check-update'),localOnly:!!document.querySelector('#total-time')&&!document.querySelector('#work-time')&&!document.querySelector('#shared-devices')&&!document.querySelector('#work'),overflow:document.documentElement.scrollWidth>innerWidth})",
                     value->{output[0]=value;done.countDown();}));
                 done.await(2,TimeUnit.SECONDS);
                 if(output[0]!=null && output[0].contains("heading")) break;
@@ -172,6 +180,7 @@ public final class RuntimeTests extends Instrumentation {
             check(output[0]!=null && output[0].contains(Updates.NAME),"WebView bridge");
             check(output[0].contains("overflow\\\":false"),"mobile layout overflow");
             check(output[0].contains("update\\\":true"),"homepage update control");
+            check(output[0].contains("localOnly\\\":true"),"phone homepage shows only local device total");
             runOnMainSync(()->web.loadUrl("http://127.0.0.1:5667/#/digital"));
             for(int i=0;i<40;i++) {
                 CountDownLatch done=new CountDownLatch(1);
@@ -183,7 +192,7 @@ public final class RuntimeTests extends Instrumentation {
                 Thread.sleep(250);
             }
             result.putString("fullDashboard",output[0]);
-            result.putString("result","PASS: parser, statistics, sync, daily update gate/backoff/job, download/hash/signature, homepage, WebView layout");
+            result.putString("result","PASS: local device total, legacy label merge, no session splitting or duplicate recollection, sync, updates, phone homepage layout");
             result.putString("web",output[0]);
             finish(Activity.RESULT_OK,result);
         } catch(Throwable error) {
