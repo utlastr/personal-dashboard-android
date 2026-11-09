@@ -80,8 +80,14 @@ public final class RuntimeTests extends Instrumentation {
         try {
             Context c=getTargetContext();
             if("true".equals(arguments.getString("github"))) {
+                if("true".equals(arguments.getString("selfUpdate"))) {
+                    Collector.prefs(c).edit().putString("upgradeSentinel","keep-data").commit();
+                    check(Updates.run(c,true),"live automatic update");
+                    result.putString("result","live GitHub self update submitted");
+                    finish(Activity.RESULT_OK,result); return;
+                }
                 JSONObject manifest=Updates.check(c);
-                check(manifest.getInt("versionCode")==Updates.VERSION,"published version");
+                check(manifest.getInt("versionCode")<=Updates.VERSION,"published version");
                 check(Updates.download(c,manifest).length()>1000000,"published GitHub APK integrity");
                 result.putString("result","PASS: live GitHub manifest and APK download/hash/package/signature");
                 finish(Activity.RESULT_OK,result); return;

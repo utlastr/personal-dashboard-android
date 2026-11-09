@@ -17,7 +17,7 @@ The app supports two independent labels:
 
 Build output:
 
-`output/PersonalDashboard-0.1.2.apk` (Android 9+, ARM64 and x86_64)
+`output/PersonalDashboard-0.1.3.apk` (Android 9+, ARM64 and x86_64)
 
 The PC sync service is in `tools/mobile_service.py`. Data sync requires pairing.
 Updates are independent and use public GitHub Releases in
@@ -36,6 +36,8 @@ Switch purpose before starting work or leisure. The phone shows local data
 and cached summaries of the other phones; the PC receives phone buckets in
 its ActivityWatch dashboard. PC activity history is not downloaded to phones.
 
+Updates use the official GitHub Releases API for both metadata and asset
+downloads, avoiding release website download gateways that can return HTTP 504.
 Updates are checked daily by a persisted network job and on launch when due.
 Android power management or force stopping can delay background execution.
 The homepage and settings offer a forced manual check. New APKs download

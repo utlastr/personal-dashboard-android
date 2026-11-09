@@ -51,8 +51,8 @@
     }
     if (!state.shared?.devices?.length) text('shared-devices', '暂无已同步的手机记录');
     text('collect-state', state.collected ? `上次采集：${date(state.collected)}` : '等待采集');
-    text('version', `Personal Dashboard ${state.version || '0.1.2'} · GitHub`);
-    text('home-version', state.version || '0.1.2');
+    text('version', `Personal Dashboard ${state.version || '0.1.3'} · GitHub`);
+    text('home-version', state.version || '0.1.3');
     for (const prefix of ['', 'home-']) {
       text(`${prefix}update-status`, state.update?.status || '等待每日检查');
       $(`${prefix}check-update`).disabled = !!state.update?.busy;

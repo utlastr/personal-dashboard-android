@@ -12,10 +12,11 @@ import java.util.*;
 import org.json.*;
 
 final class Updates {
-    static final int VERSION=3;
-    static final String NAME="0.1.2";
+    static final int VERSION=4;
+    static final String NAME="0.1.3";
     static final String REPOSITORY="utlastr/personal-dashboard-android";
     static final String RELEASES="https://github.com/"+REPOSITORY+"/releases/";
+    static final String API="https://api.github.com/repos/"+REPOSITORY+"/releases/";
     static final long DAY=24*60*60*1000L;
     private static volatile boolean busy;
 
@@ -54,16 +55,19 @@ final class Updates {
             String host=url.getHost();
             if(!"https".equals(url.getProtocol()) || url.getUserInfo()!=null
                 || (url.getPort()!=-1 && url.getPort()!=443)
-                || !(host.equals("github.com") || host.equals("release-assets.githubusercontent.com")
+                || !(host.equals("github.com") || host.equals("api.github.com") || host.equals("release-assets.githubusercontent.com")
                     || host.equals("objects.githubusercontent.com") || host.equals("releases.githubusercontent.com")))
                 throw new IOException("更新下载地址不受信任");
             if(host.equals("github.com") && !url.getPath().startsWith("/"+REPOSITORY+"/releases/"))
+                throw new IOException("更新仓库不匹配");
+            if(host.equals("api.github.com") && !url.getPath().startsWith("/repos/"+REPOSITORY+"/releases/"))
                 throw new IOException("更新仓库不匹配");
             HttpURLConnection connection=(HttpURLConnection)url.openConnection();
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(15000); connection.setReadTimeout(30000);
             connection.setRequestProperty("User-Agent","PersonalDashboard/"+NAME);
             connection.setRequestProperty("Cache-Control","no-cache");
+            connection.setRequestProperty("Accept",url.getPath().contains("/releases/assets/")?"application/octet-stream":"application/vnd.github+json");
             int code=connection.getResponseCode();
             if(code==301 || code==302 || code==303 || code==307 || code==308) {
                 String location=connection.getHeaderField("Location"); connection.disconnect();
@@ -75,19 +79,39 @@ final class Updates {
         }
         throw new IOException("更新重定向次数过多");
     }
-    static JSONObject check(Context context) throws Exception {
-        HttpURLConnection connection=connect(RELEASES+"latest/download/update-manifest.json");
+    static JSONObject readJson(String address) throws Exception {
+        HttpURLConnection connection=connect(address);
         try(InputStream input=connection.getInputStream(); ByteArrayOutputStream bytes=new ByteArrayOutputStream()) {
             byte[] buffer=new byte[4096]; int count;
             while((count=input.read(buffer))!=-1) {
                 bytes.write(buffer,0,count);
-                if(bytes.size()>65536) throw new IOException("更新清单过大");
+                if(bytes.size()>1024*1024) throw new IOException("更新清单过大");
             }
-            JSONObject manifest=validateManifest(new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8).replace("\uFEFF","")));
-            if(manifest.getInt("versionCode")<=VERSION)
-                return manifest.put("status","已是最新版本 "+NAME).put("available",false);
-            return manifest.put("available",true).put("status","发现新版本 "+manifest.getString("versionName"));
+            return new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8).replace("\uFEFF",""));
         } finally { connection.disconnect(); }
+    }
+    static JSONObject check(Context context) throws Exception {
+        JSONObject release=readJson(API+"latest");
+        if(release.optBoolean("draft") || release.optBoolean("prerelease")) throw new IOException("当前没有正式更新");
+        JSONArray assets=release.getJSONArray("assets");
+        String manifestUrl="";
+        for(int i=0;i<assets.length();i++) {
+            JSONObject asset=assets.getJSONObject(i);
+            if("update-manifest.json".equals(asset.getString("name"))) manifestUrl=API+"assets/"+asset.getLong("id");
+        }
+        if(manifestUrl.isEmpty()) throw new IOException("GitHub 发布缺少更新清单");
+        JSONObject manifest=validateManifest(readJson(manifestUrl));
+        if(!("v"+manifest.getString("versionName")).equals(release.getString("tag_name")))
+            throw new IOException("GitHub 发布标签与清单不匹配");
+        for(int i=0;i<assets.length();i++) {
+            JSONObject asset=assets.getJSONObject(i);
+            if(manifest.getString("apk").equals(asset.getString("name")))
+                manifest.put("assetUrl",API+"assets/"+asset.getLong("id"));
+        }
+        if(!manifest.has("assetUrl")) throw new IOException("GitHub 发布缺少安装包");
+        if(manifest.getInt("versionCode")<=VERSION)
+            return manifest.put("status","已是最新版本 "+NAME).put("available",false);
+        return manifest.put("available",true).put("status","发现新版本 "+manifest.getString("versionName"));
     }
     static boolean run(Context context,boolean force) {
         synchronized(Updates.class) { if(busy) return true; busy=true; }
@@ -126,7 +150,10 @@ final class Updates {
         validateManifest(manifest);
         String tag="v"+manifest.getString("versionName");
         if(!tag.matches("v[0-9A-Za-z._-]+")) throw new IOException("更新版本名称无效");
-        HttpURLConnection connection=connect(RELEASES+"download/"+tag+"/"+manifest.getString("apk"));
+        String address=manifest.getString("assetUrl");
+        if(!address.startsWith(API+"assets/") || !address.substring((API+"assets/").length()).matches("[0-9]+"))
+            throw new IOException("更新资源地址无效");
+        HttpURLConnection connection=connect(address);
         try { return download(context,manifest,connection); } finally { connection.disconnect(); }
     }
     static File download(Context context,JSONObject manifest,HttpURLConnection connection) throws Exception {
