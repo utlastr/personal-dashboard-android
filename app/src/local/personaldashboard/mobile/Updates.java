@@ -12,8 +12,8 @@ import java.util.*;
 import org.json.*;
 
 final class Updates {
-    static final int VERSION=5;
-    static final String NAME="0.1.4";
+    static final int VERSION=6;
+    static final String NAME="0.1.5";
     static final String REPOSITORY="utlastr/personal-dashboard-android";
     static final String RELEASES="https://github.com/"+REPOSITORY+"/releases/";
     static final String API="https://api.github.com/repos/"+REPOSITORY+"/releases/";

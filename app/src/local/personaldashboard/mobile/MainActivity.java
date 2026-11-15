@@ -25,7 +25,7 @@ public final class MainActivity extends Activity {
     private static volatile boolean started;
     private static final String ORIGIN="http://127.0.0.1:5667";
     private final Runnable periodic=new Runnable() {
-        public void run() { refresh(false); checkUpdate(false); timer.postDelayed(this,60000); }
+        public void run() { refresh(false); timer.postDelayed(this,60000); }
     };
     public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -75,7 +75,6 @@ public final class MainActivity extends Activity {
         web.loadUrl(ORIGIN+"/mobile.html");
         CollectJob.schedule(this);
         UpdateJob.schedule(this);
-        checkUpdate(false);
         io.submit(()->{
             try {
                 RustInterface rust=RustInterface.get(this);
@@ -114,7 +113,11 @@ public final class MainActivity extends Activity {
         super.onDestroy();
     }
     public void onBackPressed() {
-        if(web.canGoBack()) web.goBack(); else super.onBackPressed();
+        web.evaluateJavascript("(()=>{const modal=document.querySelector('dialog[open]');if(modal){modal.close();return true;}return false;})()",result->{
+            if(!"true".equals(result)) {
+                if(web.canGoBack()) web.goBack(); else MainActivity.super.onBackPressed();
+            }
+        });
     }
     private void refresh(boolean checkUpdate) {
         io.submit(()->{
@@ -128,9 +131,12 @@ public final class MainActivity extends Activity {
     private void checkUpdate(boolean force) { updater.submit(()->Updates.run(this,force)); }
     private final class Bridge {
         @JavascriptInterface public String state() {
+            return report("day","");
+        }
+        @JavascriptInterface public String report(String period,String date) {
             try(Store store=new Store(MainActivity.this)) {
                 SharedPreferences p=Collector.prefs(MainActivity.this);
-                return store.summary().put("permission",Collector.allowed(MainActivity.this))
+                return store.report(period,date,System.currentTimeMillis()).put("permission",Collector.allowed(MainActivity.this))
                     .put("device",Collector.device(MainActivity.this)).put("name",p.getString("name",Build.MODEL))
                     .put("role",p.getString("role","personal")).put("server",p.getString("server",""))
                     .put("paired",!p.getString("token","").isEmpty()).put("version",Updates.NAME)
@@ -156,7 +162,7 @@ public final class MainActivity extends Activity {
                 SharedPreferences.Editor editor=p.edit().putString("role",role).putString("name",config.getString("name"))
                     .putString("server",server);
                 if(!token.isEmpty()) editor.putString("token",token);
-                editor.commit(); MainActivity.this.refresh(true); return "";
+                editor.commit(); MainActivity.this.refresh(false); return "";
             } catch(Exception error) { return error.getMessage(); }
         }
         @JavascriptInterface public void install() {

@@ -10,13 +10,13 @@ when a paired server is configured.
 
 Each phone is either a work phone or a personal phone. This is a device
 identity, not a session or application category. The phone shows only its own
-daily usage total, app usage and recent records. Existing purpose labels are
+daily or weekly usage total and app usage. Existing purpose labels are
 ignored in summaries; historical records and sync IDs are preserved.
 The PC overview displays the PC, work phone and personal phone side by side.
 
 Build output:
 
-`output/PersonalDashboard-0.1.4.apk` (Android 9+, ARM64 and x86_64)
+`output/PersonalDashboard-0.1.5.apk` (Android 9+, ARM64 and x86_64)
 
 The PC sync service is in `tools/mobile_service.py`. Data sync requires pairing.
 Updates are independent and use public GitHub Releases in
@@ -35,15 +35,23 @@ its ActivityWatch dashboard. PC activity history is not downloaded to phones.
 
 Updates use the official GitHub Releases API for both metadata and asset
 downloads, avoiding release website download gateways that can return HTTP 504.
-Updates are checked daily by a persisted network job and on launch when due.
+Updates are checked daily by a persisted network job, independently of the screen.
 Android power management or force stopping can delay background execution.
-The homepage and settings offer a forced manual check. New APKs download
+The device menu offers a forced manual check. New APKs download
 automatically and are checked for SHA-256, package, version and signing identity.
 Android 12+ self-updates request installation without user action. Android may
-still require installation permission or confirmation; the homepage shows the
+still require installation permission or confirmation; the device menu shows the
 required action. Android 9-11 need confirmation. No installer screen opens
 unsolicited from a background job. Grant this app permission to install updates
 once when prompted. Initial upgrade from 0.1.0/0.1.1 must be installed manually.
+
+The only homepage tabs are Day and Week. Dates can be selected or stepped;
+weeks run Monday through Sunday in the phone's time zone. Tap an app for
+24-hour duration or session-frequency distributions. Week also offers seven
+daily duration bars. Sessions crossing hour/day boundaries are clipped to each
+bin; repeated daylight-saving hours are combined without losing elapsed time.
+System home launchers are excluded from new collection and historical reports.
+App rows show their display names without package-name subtitles.
 
 To publish, increment AndroidManifest.xml and Updates.VERSION/NAME, build with
 the same signing key, test, and run `tools/publish-release.ps1`.

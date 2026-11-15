@@ -20,6 +20,14 @@ public final class RuntimeTests extends Instrumentation {
     private void check(boolean condition,String message) {
         if(!condition) throw new AssertionError(message);
     }
+    private void screenshot(Context context,String name) throws Exception {
+        Thread.sleep(600);
+        android.graphics.Bitmap image=getUiAutomation().takeScreenshot();
+        check(image!=null,"Android screenshot");
+        try(FileOutputStream output=new FileOutputStream(new File(context.getExternalFilesDir(null),name))) {
+            image.compress(android.graphics.Bitmap.CompressFormat.PNG,100,output);
+        } finally { image.recycle(); }
+    }
     private void add(Store store,String id,String pkg,String purpose,long start,long end) {
         ContentValues row=new ContentValues();
         row.put("id",id); row.put("start",start); row.put("end",end);
@@ -55,7 +63,13 @@ public final class RuntimeTests extends Instrumentation {
         JSONArray events=new JSONArray(json);
         Calendar calendar=Calendar.getInstance(); calendar.set(Calendar.HOUR_OF_DAY,0);
         calendar.set(Calendar.MINUTE,0); calendar.set(Calendar.SECOND,0); calendar.set(Calendar.MILLISECOND,0);
-        day=calendar.getTimeInMillis(); now=System.currentTimeMillis();
+        now=0;
+        for(int i=0;i<events.length();i++) {
+            JSONObject event=events.getJSONObject(i);
+            now=Math.max(now,Instant.parse(event.getString("timestamp")).toEpochMilli()+Math.round(event.getDouble("duration")*1000));
+        }
+        calendar.setTimeInMillis(now); calendar.set(Calendar.HOUR_OF_DAY,0); calendar.set(Calendar.MINUTE,0);
+        calendar.set(Calendar.SECOND,0); calendar.set(Calendar.MILLISECOND,0); day=calendar.getTimeInMillis();
         long expectedWork=0,expectedPersonal=0,douyin=0;
         try(Store store=new Store(context,null)) {
             for(int i=0;i<events.length();i++) {
@@ -64,6 +78,8 @@ public final class RuntimeTests extends Instrumentation {
                 long end=start+Math.round(event.getDouble("duration")*1000);
                 String purpose=data.optString("purpose","personal"),pkg=data.optString("package");
                 add(store,"replay-"+i,pkg,purpose,start,end);
+                store.getWritableDatabase().execSQL("UPDATE sessions SET app=? WHERE id=?",new Object[]{data.optString("app",pkg),"replay-"+i});
+                if(store.excluded(pkg,data.optString("app",pkg))) continue;
                 long duration=Math.max(0,Math.min(now,end)-Math.max(day,start));
                 if(purpose.equals("work")) expectedWork+=duration; else expectedPersonal+=duration;
                 if(pkg.equals("com.ss.android.ugc.aweme")) douyin+=duration;
@@ -75,13 +91,68 @@ public final class RuntimeTests extends Instrumentation {
                 +"; personalMs="+expectedPersonal+"; douyinMs="+douyin);
         }
     }
+    private long instant(String value) {
+        return java.time.LocalDateTime.parse(value).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+    }
+    private void ranges(Context context) throws Exception {
+        long minute=60000,now=instant("2026-11-16T12:00:00"),monday=instant("2026-11-09T00:00:00");
+        try(Store store=new Store(context,null)) {
+            add(store,"cross","example.app","personal",monday-10*minute,monday+10*minute);
+            add(store,"hour","example.app","work",monday+50*minute,monday+80*minute);
+            add(store,"duplicate","example.app","work",monday+55*minute,monday+70*minute);
+            add(store,"sunday","example.app","work",monday+6*86400000L+23*3600000L,monday+7*86400000L+5*minute);
+            add(store,"old-launcher","com.android.launcher3","personal",monday,monday+3600000);
+            add(store,"other-launcher","vendor.desktop","personal",monday,monday+3600000);
+            store.getWritableDatabase().execSQL("UPDATE sessions SET app='System Launcher' WHERE pkg='vendor.desktop'");
+            store.insert(new ForegroundParser.Session("com.android.launcher3","",monday,monday+7200000),"Launcher","personal");
+            JSONObject day=store.report("day","2026-11-09",now);
+            check(day.getLong("total")==40*minute,"day clips midnight, excludes historical launchers and overlapping duplicate");
+            check(day.getJSONArray("apps").length()==1,"launcher absent from app ranking");
+            check(day.getJSONArray("hours").getLong(0)==20*minute && day.getJSONArray("hours").getLong(1)==20*minute,"session splits at hour");
+            JSONObject app=day.getJSONArray("apps").getJSONObject(0);
+            check(app.getJSONArray("frequency").getInt(0)==2 && app.getJSONArray("frequency").getInt(1)==1,"hourly session frequency");
+            JSONObject week=store.report("week","2026-11-15",now);
+            check(week.getString("start").equals("2026-11-09") && week.getString("last").equals("2026-11-15"),"Monday to Sunday week");
+            check(week.getLong("total")==100*minute && week.getJSONArray("days").getLong(6)==60*minute,"week clips next Monday");
+            check(store.report("day","2026-11-16",now).getLong("total")==5*minute,"next day receives cross-midnight tail");
+            check(store.report("day","2026-11-17",now).getLong("total")==0,"future range is empty");
+            check(store.report("day","2026-11-09",monday+60*minute).getLong("total")==20*minute,"current interval clips now");
+        }
+        try(Store store=new Store(context,null)) {
+            add(store,"legacy-1","app","personal",monday,monday+5*minute);
+            add(store,"legacy-2","app","work",monday+5*minute,monday+10*minute);
+            check(store.report("day","2026-11-09",now).getJSONArray("apps").getJSONObject(0)
+                .getJSONArray("frequency").getInt(0)==1,"legacy split is one continuous use");
+        }
+        TimeZone previous=TimeZone.getDefault();
+        try {
+            TimeZone.setDefault(TimeZone.getTimeZone("America/New_York"));
+            for(String date:new String[]{"2026-03-08","2026-11-01"}) {
+                java.time.LocalDate first=java.time.LocalDate.parse(date);
+                long a=first.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+                long b=first.plusDays(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+                try(Store store=new Store(context,null)) {
+                    add(store,date,"dst","personal",a,b);
+                    JSONObject report=store.report("day",date,b);
+                    long sum=0; for(int i=0;i<24;i++) sum+=report.getJSONArray("hours").getLong(i);
+                    check(sum==b-a && report.getLong("total")==b-a,"DST day conserves actual duration "+date);
+                }
+            }
+        } finally { TimeZone.setDefault(previous); }
+    }
     public void onStart() {
         Bundle result=new Bundle();
         try {
             Context c=getTargetContext();
             if("true".equals(arguments.getString("github"))) {
                 if("true".equals(arguments.getString("selfUpdate"))) {
-                    Collector.prefs(c).edit().putString("upgradeSentinel","keep-data").commit();
+                    Collector.prefs(c).edit().putString("upgradeSentinel","keep-data")
+                        .putLong("updateChecked",0).putLong("updateAttempted",0).commit();
+                    if("true".equals(arguments.getString("background"))) {
+                        UpdateJob.schedule(c);
+                        result.putString("result","background update job scheduled; ready to close app and trigger job");
+                        finish(Activity.RESULT_OK,result); return;
+                    }
                     check(Updates.run(c,true),"live automatic update");
                     result.putString("result","live GitHub self update submitted");
                     finish(Activity.RESULT_OK,result); return;
@@ -103,6 +174,7 @@ public final class RuntimeTests extends Instrumentation {
                 finish(Activity.RESULT_OK,result); return;
             }
             statistics(c,result);
+            ranges(c);
             ForegroundParser.Result parsed=ForegroundParser.parse(Arrays.asList(
                 new ForegroundParser.Event(1,1000,"a","a"),
                 new ForegroundParser.Event(1,5000,"b","b"),
@@ -171,7 +243,7 @@ public final class RuntimeTests extends Instrumentation {
             for(int i=0;i<20;i++) {
                 CountDownLatch done=new CountDownLatch(1);
                 runOnMainSync(()->web.evaluateJavascript(
-                    "document.documentElement && JSON.stringify({version:JSON.parse(Dashboard.state()).version,heading:document.querySelector('h1')?.textContent,update:!!document.querySelector('#home-check-update'),localOnly:!!document.querySelector('#total-time')&&!document.querySelector('#work-time')&&!document.querySelector('#shared-devices')&&!document.querySelector('#work'),overflow:document.documentElement.scrollWidth>innerWidth})",
+                    "document.documentElement && JSON.stringify({version:JSON.parse(Dashboard.state()).version,heading:document.querySelector('h1')?.textContent,backgroundUpdate:!document.querySelector('#home-check-update')&&!document.querySelector('#device-dialog').open,tabs:Array.from(document.querySelectorAll('[role=tab]')).map(x=>x.textContent).join(','),localOnly:!!document.querySelector('#total-time')&&!document.querySelector('#work-time')&&!document.querySelector('#shared-devices')&&!document.querySelector('#work'),overflow:document.documentElement.scrollWidth>innerWidth})",
                     value->{output[0]=value;done.countDown();}));
                 done.await(2,TimeUnit.SECONDS);
                 if(output[0]!=null && output[0].contains("heading")) break;
@@ -179,20 +251,28 @@ public final class RuntimeTests extends Instrumentation {
             }
             check(output[0]!=null && output[0].contains(Updates.NAME),"WebView bridge");
             check(output[0].contains("overflow\\\":false"),"mobile layout overflow");
-            check(output[0].contains("update\\\":true"),"homepage update control");
+            check(output[0].contains("backgroundUpdate\\\":true"),"no update panel on homepage");
+            check(output[0].contains("Day,Week"),"only Day and Week tabs");
             check(output[0].contains("localOnly\\\":true"),"phone homepage shows only local device total");
-            runOnMainSync(()->web.loadUrl("http://127.0.0.1:5667/#/digital"));
-            for(int i=0;i<40;i++) {
-                CountDownLatch done=new CountDownLatch(1);
-                runOnMainSync(()->web.evaluateJavascript(
-                    "JSON.stringify({text:document.body?.innerText,charts:document.querySelectorAll('canvas').length})",
-                    value->{output[0]=value;done.countDown();}));
-                done.await(2,TimeUnit.SECONDS);
-                if(output[0]!=null && output[0].contains("ActivityWatch")) break;
-                Thread.sleep(250);
-            }
-            result.putString("fullDashboard",output[0]);
-            result.putString("result","PASS: local device total, legacy label merge, no session splitting or duplicate recollection, sync, updates, phone homepage layout");
+            screenshot(c,"verify-day.png");
+            CountDownLatch interaction=new CountDownLatch(1);
+            runOnMainSync(()->web.evaluateJavascript(
+                "document.querySelector('#week').click(); document.querySelector('#apps .row').click(); document.querySelector('#detail-group').value='days'; document.querySelector('#detail-group').dispatchEvent(new Event('change')); JSON.stringify({open:document.querySelector('#app-detail').open,bars:document.querySelectorAll('#detail-chart .bar-column').length,packageCaption:!!document.querySelector('#apps small'),overflow:document.documentElement.scrollWidth>innerWidth})",
+                value->{output[0]=value;interaction.countDown();}));
+            interaction.await(3,TimeUnit.SECONDS);
+            check(output[0]!=null && output[0].contains("open\\\":true") && output[0].contains("bars\\\":7"),"week app detail has seven daily bars");
+            check(output[0].contains("packageCaption\\\":false") && output[0].contains("overflow\\\":false"),"clean labels and detail layout");
+            screenshot(c,"verify-week-detail.png");
+            CountDownLatch hourly=new CountDownLatch(1);
+            runOnMainSync(()->web.evaluateJavascript(
+                "document.querySelector('#detail-group').value='hours'; document.querySelector('#detail-group').dispatchEvent(new Event('change')); document.querySelector('#detail-metric').value='frequency'; document.querySelector('#detail-metric').dispatchEvent(new Event('change')); JSON.stringify({bars:document.querySelectorAll('#detail-chart .bar-column').length,frequency:document.querySelector('#detail-chart button').getAttribute('aria-label').includes('次')})",
+                value->{output[0]=value;hourly.countDown();}));
+            hourly.await(3,TimeUnit.SECONDS);
+            check(output[0]!=null && output[0].contains("bars\\\":24") && output[0].contains("frequency\\\":true"),"24 hour frequency detail");
+            screenshot(c,"verify-hours-detail.png");
+            // Leave the real WebView on its homepage for visual verification.
+            runOnMainSync(()->web.evaluateJavascript("document.querySelector('#app-detail').close(); document.querySelector('#day').click();",null));
+            result.putString("result","PASS: Day/Week totals, hourly/daily charts, DST, launcher filtering, overlap dedupe, legacy labels, sync, update job, APK integrity, WebView interactions");
             result.putString("web",output[0]);
             finish(Activity.RESULT_OK,result);
         } catch(Throwable error) {

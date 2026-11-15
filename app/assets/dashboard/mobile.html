@@ -1,36 +1,30 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Personal Dashboard</title><link rel="stylesheet" href="mobile.css"><script src="mobile.js" defer></script></head>
 <body>
-<header><img src="logo.png" alt="" width="28" height="28"><strong>Personal Dashboard</strong><button id="refresh" aria-label="刷新数据" title="刷新数据">↻</button></header>
+<header><img src="logo.png" alt="" width="26" height="26"><strong>Personal Dashboard</strong><button id="refresh" class="icon-button" aria-label="刷新数据" title="刷新数据">↻</button><button id="connection" class="icon-button" aria-label="设备与连接" title="设备与连接">⋮</button></header>
 <main>
-<div class="page-head"><div><h1>数字健康</h1><p id="device-name">手机</p></div><span id="role-badge">日常机</span></div>
-<nav class="tabs" aria-label="页面"><button data-page="overview" class="active">概览</button><button data-page="timeline">记录</button><button data-page="settings">设置</button><a href="/#/digital">完整面板 ↗</a></nav>
+<div class="device-line"><span id="device-name">手机</span><span id="role-badge">日常机</span></div>
+<nav class="tabs" role="tablist" aria-label="统计周期"><button id="day" role="tab" aria-selected="true" class="active">Day</button><button id="week" role="tab" aria-selected="false">Week</button></nav>
+<div class="date-picker"><button id="previous" class="icon-button" aria-label="上一周期" title="上一周期">‹</button><label><span class="sr-only">选择日期</span><input id="date" type="date" required></label><button id="next" class="icon-button" aria-label="下一周期" title="下一周期">›</button></div>
+<section class="metrics"><h1 id="total-label">本机今日使用</h1><strong id="total-time">0 分钟</strong><span id="range-label"></span></section>
 <div id="permission" hidden><p>尚未开启使用情况访问权限</p><button id="grant">开启权限</button></div>
 <div id="message" role="status" hidden></div>
-<section id="overview">
-<div class="section-head"><h2>应用更新</h2><span id="home-version"></span></div>
-<p id="home-update-status" role="status">等待检查</p>
-<div class="update-actions"><button id="home-check-update">检查更新</button><button id="home-install" hidden>安装更新</button></div>
-<p id="home-update-checked"></p>
-<div class="metrics"><div><span>本机今日使用</span><strong id="total-time">0 分钟</strong></div></div>
-<div class="section-head"><h2>应用使用</h2><span>今天 · 已结束的会话</span></div>
-<div id="apps" class="rows"></div>
-<div class="section-head"><h2>同步状态</h2><span id="sync-state"></span></div>
-<p id="sync-detail"></p>
-</section>
-<section id="timeline" hidden><div class="section-head"><h2>本机最近记录</h2></div><div id="sessions" class="rows"></div><button id="export">导出记录</button></section>
-<section id="settings" hidden>
-<h2>设备</h2>
-<form id="config">
-<label for="name">设备名称</label><input id="name" required maxlength="80">
+<section><div class="section-head"><h2 id="distribution-title">24 小时分布</h2><span id="chart-unit">使用时长</span></div><div id="summary-chart" class="chart"></div><p id="summary-selection" class="chart-selection" role="status"></p></section>
+<section><div class="section-head"><h2>应用使用</h2><span id="app-count"></span></div><div id="apps" class="rows"></div></section>
+<footer><span id="sync-state"></span><span id="collect-state"></span></footer>
+</main>
+<dialog id="app-detail" aria-labelledby="detail-title">
+<div class="dialog-head"><h2 id="detail-title"></h2><button id="close-detail" class="icon-button" aria-label="关闭详情" title="关闭详情">×</button></div>
+<p id="detail-range"></p><strong id="detail-total" class="detail-total"></strong>
+<div class="detail-controls"><select id="detail-group" aria-label="分布方式"><option value="hours">24 小时</option><option value="days">每天</option></select><select id="detail-metric" aria-label="统计指标"><option value="duration">使用时长</option><option value="frequency">使用次数</option></select></div>
+<div id="detail-chart" class="chart"></div><p id="detail-selection" class="chart-selection" role="status"></p>
+</dialog>
+<dialog id="device-dialog" aria-labelledby="device-title">
+<div class="dialog-head"><h2 id="device-title">设备与连接</h2><button id="close-device" class="icon-button" aria-label="关闭" title="关闭">×</button></div>
+<form id="config"><label for="name">设备名称</label><input id="name" required maxlength="80">
 <label for="role">这台手机是</label><select id="role"><option value="personal">日常机</option><option value="work">工作机</option></select>
-<h2>连接电脑</h2>
-<label for="server">服务地址</label><input id="server" type="url" placeholder="http://192.168.1.244:5668" autocomplete="off">
-<label for="token">配对码</label><input id="token" type="password" placeholder="输入电脑端提供的配对码" autocomplete="off">
-<button type="submit" class="primary">保存并同步</button><p id="save-status" role="status"></p>
-</form>
-<h2>应用更新</h2><p id="version"></p><p id="update-status">尚未检查</p><div class="update-actions"><button id="check-update">检查更新</button><button id="install" hidden>安装更新</button></div>
-<h2>开源组件</h2><p>ActivityWatch · MPL-2.0</p><a href="/OPEN_SOURCE.html">许可证与源码说明</a>
-</section>
-</main><footer id="collect-state"></footer>
+<label for="server">电脑服务地址</label><input id="server" type="url" placeholder="http://192.168.1.244:5668" autocomplete="off">
+<label for="token">配对码</label><input id="token" type="password" autocomplete="off"><button type="submit" class="primary">保存并同步</button><p id="save-status" role="status"></p></form>
+<hr><p id="version"></p><p id="update-status" role="status"></p><div class="update-actions"><button id="check-update">检查更新</button><button id="install" hidden>安装更新</button><button id="export">导出记录</button></div><p><a href="/OPEN_SOURCE.html">开源许可</a></p>
+</dialog>
 </body></html>

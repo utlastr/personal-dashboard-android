@@ -1,4 +1,4 @@
-param([switch]$SelfUpdate,[switch]$GitHub)
+param([switch]$SelfUpdate,[switch]$GitHub,[switch]$Background)
 $ErrorActionPreference='Stop'
 $project=Split-Path -Parent $PSScriptRoot
 $work=Join-Path $project ('.local\test-build-'+[Guid]::NewGuid().ToString('N').Substring(0,8))
@@ -26,6 +26,7 @@ $adb='D:\Users\KLEI\tmp\keep-analysis-tools\android-sdk\platform-tools\adb.exe'
 $argsList=@('-s','emulator-5592','shell','am','instrument','-w')
 if($SelfUpdate){$argsList+=@('-e','selfUpdate','true')}
 if($GitHub){$argsList+=@('-e','github','true')}
+if($Background){$argsList+=@('-e','background','true')}
 $argsList+='local.personaldashboard.mobile.tests/local.personaldashboard.mobile.RuntimeTests'
 $testOutput=& $adb @argsList
 $testOutput
