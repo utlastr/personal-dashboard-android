@@ -16,7 +16,7 @@ The PC overview displays the PC, work phone and personal phone side by side.
 
 Build output:
 
-`output/PersonalDashboard-0.1.6.apk` (Android 9+, ARM64 and x86_64)
+`output/PersonalDashboard-0.1.7.apk` (Android 9+, ARM64 and x86_64)
 
 The PC sync service is in `tools/mobile_service.py`. Data sync requires pairing.
 Updates are independent and use public GitHub Releases in

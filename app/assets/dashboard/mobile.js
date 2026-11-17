@@ -85,7 +85,13 @@
       for (const app of state.apps) {
         const row = document.createElement('button'); row.className = 'row';
         const icon = document.createElement('img'); icon.className = 'app-icon'; icon.alt = '';
-        icon.src = `/mobile-icon?package=${encodeURIComponent(app.package)}`; icon.onerror = () => { icon.hidden = true; };
+        icon.src = `/mobile-icon?package=${encodeURIComponent(app.package)}`;
+        icon.onerror = () => {
+          const placeholder = document.createElement('span'); placeholder.className = 'app-icon app-initial';
+          placeholder.textContent = (app.app || '?').slice(0, 1); placeholder.setAttribute('aria-hidden', 'true');
+          Object.assign(placeholder.style, {display: 'grid', placeItems: 'center', background: '#e2e9ed', color: '#466b91'});
+          icon.replaceWith(placeholder);
+        };
         const name = document.createElement('strong'); name.textContent = app.app;
         const time = document.createElement('span'); time.className = 'duration'; time.textContent = duration(app.ms);
         row.append(icon, name, time);

@@ -22,10 +22,17 @@ final class Store extends SQLiteOpenHelper {
         super(context,name,null,1);
         Intent home=new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME);
         for(android.content.pm.ResolveInfo info:context.getPackageManager().queryIntentActivities(home,0))
-            if(info.activityInfo!=null) launchers.add(info.activityInfo.packageName);
+            if(info.activityInfo!=null && !"com.android.settings".equals(info.activityInfo.packageName))
+                launchers.add(info.activityInfo.packageName);
     }
     boolean excluded(String pkg,String label) {
-        return launchers.contains(pkg) || "System Launcher".equalsIgnoreCase(label) || "系统桌面".equals(label);
+        return launchers.contains(pkg) || "System Launcher".equalsIgnoreCase(label) || "系统桌面".equals(label)
+            || "com.google.android.googlequicksearchbox".equals(pkg)
+            || "com.android.quicksearchbox".equals(pkg)
+            || "QuickSearchBox".equalsIgnoreCase(label) || "KeyTap".equalsIgnoreCase(label)
+            || "android".equals(pkg) || "com.android.settings.intelligence".equals(pkg)
+            || "com.android.permissioncontroller".equals(pkg) || "com.android.packageinstaller".equals(pkg)
+            || pkg.toLowerCase(Locale.ROOT).matches(".*(?:^|\\.)keytap(?:\\..*)?");
     }
     public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE sessions(id TEXT PRIMARY KEY,start INTEGER,end INTEGER,pkg TEXT,app TEXT,activity TEXT,purpose TEXT,role TEXT,synced INTEGER DEFAULT 0,mirrored INTEGER DEFAULT 0)");

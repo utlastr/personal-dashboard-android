@@ -26,6 +26,12 @@ public final class LimitTests extends Instrumentation {
         }
     }
     private void rules(Context c) throws Exception {
+        try(Store store=new Store(c,null)) {
+            check(store.excluded("com.google.android.googlequicksearchbox","Google"),"QuickSearchBox excluded");
+            check(store.excluded("com.example.keytap","KeyTap"),"KeyTap excluded");
+            check(!store.excluded("com.xingin.xhs","Red Note"),"Red Note retained");
+            check(!store.excluded("com.android.settings","Settings"),"Settings retained");
+        }
         for(int minute=0;minute<1440;minute++) {
             check(AppLimits.allowed("tv.danmaku.bili",time(minute))==(minute>=1320&&minute<1380),"Bilibili minute "+minute);
             check(AppLimits.allowed("com.bilibili.app.in",time(minute))==(minute>=1320&&minute<1380),"installed Bilibili variant");
