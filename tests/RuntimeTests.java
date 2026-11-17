@@ -270,8 +270,17 @@ public final class RuntimeTests extends Instrumentation {
             hourly.await(3,TimeUnit.SECONDS);
             check(output[0]!=null && output[0].contains("bars\\\":24") && output[0].contains("frequency\\\":true"),"24 hour frequency detail");
             screenshot(c,"verify-hours-detail.png");
+            CountDownLatch limitPanel=new CountDownLatch(1);
+            runOnMainSync(()->web.evaluateJavascript(
+                "document.querySelector('#app-detail').close();document.querySelector('#connection').click();JSON.stringify({open:document.querySelector('#device-dialog').open,limits:!!document.querySelector('#limits-enabled'),honest:document.querySelector('#limit-status').textContent.includes('没有隐藏权限'),bili:document.querySelector('#device-dialog').textContent.includes('22:00–23:00'),douyin:document.querySelector('#device-dialog').textContent.includes('15:30–17:30'),overflow:document.documentElement.scrollWidth>innerWidth})",
+                value->{output[0]=value;limitPanel.countDown();}));
+            limitPanel.await(3,TimeUnit.SECONDS);
+            check(output[0]!=null&&output[0].contains("open\\\":true")&&output[0].contains("limits\\\":true")
+                &&output[0].contains("honest\\\":true")&&output[0].contains("bili\\\":true")&&output[0].contains("douyin\\\":true")
+                &&output[0].contains("overflow\\\":false"),"limit menu capability, hours and layout");
+            screenshot(c,"verify-limit-menu.png");
             // Leave the real WebView on its homepage for visual verification.
-            runOnMainSync(()->web.evaluateJavascript("document.querySelector('#app-detail').close(); document.querySelector('#day').click();",null));
+            runOnMainSync(()->web.evaluateJavascript("document.querySelector('#device-dialog').close(); document.querySelector('#day').click();",null));
             result.putString("result","PASS: Day/Week totals, hourly/daily charts, DST, launcher filtering, overlap dedupe, legacy labels, sync, update job, APK integrity, WebView interactions");
             result.putString("web",output[0]);
             finish(Activity.RESULT_OK,result);

@@ -57,6 +57,15 @@
     if (!state.apps) { text('message', state.message || '暂时无法读取使用记录'); $('message').hidden = false; return; }
     text('device-name', state.name || '手机'); text('role-badge', state.role === 'work' ? '工作机' : '日常机');
     $('permission').hidden = !!state.permission;
+    const limits = state.limits || {};
+    $('limits-enabled').checked = limits.enabled !== false;
+    $('limit-notice').hidden = !limits.enabled || limits.accessibility || (limits.canHide && limits.exact && !limits.error);
+    text('limit-notice-text', limits.canHide ? '已启用时段隐藏；开启无障碍后可在结束时退出应用。' : '时段限制尚未生效：请开启无障碍权限。当前手机无法隐藏图标。');
+    text('limit-status', !limits.enabled ? '已关闭时段限制' : limits.canHide
+      ? `有隐藏权限，按手机时间隐藏或恢复图标。${limits.exact ? '' : '未允许精确闹钟，图标切换可能延迟。'}${limits.accessibility ? '时段拦截已连接。' : ''}`
+      : `没有隐藏权限，图标仍会显示。${limits.accessibility ? '时段拦截已连接，禁止时段打开将返回桌面。' : '无障碍未连接，暂时无法拦截。'}`);
+    $('limit-error').hidden = !limits.error; text('limit-error', limits.error || '');
+    $('limit-alarm').hidden = !limits.enabled || !limits.canHide || limits.exact;
     $('message').hidden = !state.message; text('message', state.message || '');
     text('total-time', duration(state.total));
     const current = state.start <= today() && state.last >= today();
@@ -113,6 +122,9 @@
   $('close-device').onclick = () => $('device-dialog').close();
   for (const id of ['app-detail', 'device-dialog']) $(id).onclick = event => { if (event.target === $(id)) { const r = $(id).getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) $(id).close(); } };
   $('grant').onclick = () => bridge?.permission();
+  $('limit-grant').onclick = $('limit-access').onclick = () => bridge?.limitPermission();
+  $('limit-alarm').onclick = () => bridge?.exactAlarmPermission();
+  $('limits-enabled').onchange = () => { bridge?.limits($('limits-enabled').checked); };
   $('refresh').onclick = () => { bridge?.refresh(); render(); };
   $('check-update').onclick = () => { bridge?.checkUpdate(); render(); };
   $('install').onclick = () => bridge?.install();

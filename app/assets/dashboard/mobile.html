@@ -8,6 +8,7 @@
 <div class="date-picker"><button id="previous" class="icon-button" aria-label="上一周期" title="上一周期">‹</button><label><span class="sr-only">选择日期</span><input id="date" type="date" required></label><button id="next" class="icon-button" aria-label="下一周期" title="下一周期">›</button></div>
 <section class="metrics"><h1 id="total-label">本机今日使用</h1><strong id="total-time">0 分钟</strong><span id="range-label"></span></section>
 <div id="permission" hidden><p>尚未开启使用情况访问权限</p><button id="grant">开启权限</button></div>
+<div id="limit-notice" hidden><p id="limit-notice-text"></p><button id="limit-grant">开启时段拦截</button></div>
 <div id="message" role="status" hidden></div>
 <section><div class="section-head"><h2 id="distribution-title">24 小时分布</h2><span id="chart-unit">使用时长</span></div><div id="summary-chart" class="chart"></div><p id="summary-selection" class="chart-selection" role="status"></p></section>
 <section><div class="section-head"><h2>应用使用</h2><span id="app-count"></span></div><div id="apps" class="rows"></div></section>
@@ -21,6 +22,12 @@
 </dialog>
 <dialog id="device-dialog" aria-labelledby="device-title">
 <div class="dialog-head"><h2 id="device-title">设备与连接</h2><button id="close-device" class="icon-button" aria-label="关闭" title="关闭">×</button></div>
+<h2>应用时段限制</h2>
+<label class="limit-switch"><input id="limits-enabled" type="checkbox" checked>每天按时段限制</label>
+<p>哔哩哔哩：22:00–23:00<br>抖音：15:30–17:30</p>
+<p id="limit-status" role="status"></p>
+<p id="limit-error" role="status" hidden></p>
+<div class="update-actions"><button id="limit-access">无障碍权限</button><button id="limit-alarm" hidden>允许准时恢复图标</button></div>
 <form id="config"><label for="name">设备名称</label><input id="name" required maxlength="80">
 <label for="role">这台手机是</label><select id="role"><option value="personal">日常机</option><option value="work">工作机</option></select>
 <label for="server">电脑服务地址</label><input id="server" type="url" placeholder="http://192.168.1.244:5668" autocomplete="off">

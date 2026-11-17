@@ -16,7 +16,7 @@ The PC overview displays the PC, work phone and personal phone side by side.
 
 Build output:
 
-`output/PersonalDashboard-0.1.5.apk` (Android 9+, ARM64 and x86_64)
+`output/PersonalDashboard-0.1.6.apk` (Android 9+, ARM64 and x86_64)
 
 The PC sync service is in `tools/mobile_service.py`. Data sync requires pairing.
 Updates are independent and use public GitHub Releases in
@@ -52,6 +52,28 @@ daily duration bars. Sessions crossing hour/day boundaries are clipped to each
 bin; repeated daylight-saving hours are combined without losing elapsed time.
 System home launchers are excluded from new collection and historical reports.
 App rows show their display names without package-name subtitles.
+
+Daily app limits are enabled by default: Bilibili 22:00 inclusive to 23:00
+exclusive; Douyin 15:30 inclusive to 17:30 exclusive, using phone local time.
+The connected phone's `com.bilibili.app.in` variant is included.
+The device menu shows actual capabilities and an enable/disable checkbox.
+Ordinary phones require the user to enable the accessibility service once.
+It observes foreground package names only and returns home outside the window,
+including when the time window ends while an app is open; icons remain visible.
+Without accessibility or hiding permission, the interface reports inactive
+limits instead of claiming protection. This is voluntary self-control, not
+tamper-proof parental control; system force-stop or permission revocation stops it.
+
+If the app already holds device/profile owner or delegated package-access
+authority, it uses DevicePolicyManager application hiding. It never attempts
+device-owner provisioning, root access or resetting the phone. A profile owner
+only controls its own Android profile. Each boundary schedules an alarm;
+exact-alarm permission is requested through the device menu when needed.
+Without exact-alarm access Android may delay icon changes. Boot, time-zone/time
+changes, package replacement, new target installs and a persistent recovery job
+reconcile state. Disabling restores only packages this app hid, not preexisting
+administrator restrictions. Revoked management permission can prevent restoring
+previously hidden packages and is reported explicitly.
 
 To publish, increment AndroidManifest.xml and Updates.VERSION/NAME, build with
 the same signing key, test, and run `tools/publish-release.ps1`.

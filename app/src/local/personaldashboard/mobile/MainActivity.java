@@ -75,6 +75,7 @@ public final class MainActivity extends Activity {
         web.loadUrl(ORIGIN+"/mobile.html");
         CollectJob.schedule(this);
         UpdateJob.schedule(this);
+        LimitJob.schedule(this);
         io.submit(()->{
             try {
                 RustInterface rust=RustInterface.get(this);
@@ -99,6 +100,7 @@ public final class MainActivity extends Activity {
     }
     public void onResume() {
         super.onResume(); timer.postDelayed(periodic,1000);
+        io.submit(()->AppLimits.apply(this));
         updater.submit(()->{
             try {
                 if(Updates.state(this).optBoolean("permissionRequired") && getPackageManager().canRequestPackageInstalls())
@@ -141,13 +143,24 @@ public final class MainActivity extends Activity {
                     .put("role",p.getString("role","personal")).put("server",p.getString("server",""))
                     .put("paired",!p.getString("token","").isEmpty()).put("version",Updates.NAME)
                     .put("synced",p.getLong("synced",0)).put("collected",p.getLong("collected",0))
-                    .put("message",operation).put("update",Updates.state(MainActivity.this)).toString();
+                    .put("message",operation).put("limits",AppLimits.state(MainActivity.this))
+                    .put("update",Updates.state(MainActivity.this)).toString();
             } catch(Exception error) { return "{\"message\":"+JSONObject.quote(error.toString())+"}"; }
         }
         @JavascriptInterface public void permission() {
             runOnUiThread(()->startActivity(new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS,Uri.parse("package:"+getPackageName()))));
         }
         @JavascriptInterface public void refresh() { MainActivity.this.refresh(false); }
+        @JavascriptInterface public void limitPermission() {
+            runOnUiThread(()->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+        }
+        @JavascriptInterface public void exactAlarmPermission() {
+            if(Build.VERSION.SDK_INT>=31)
+                runOnUiThread(()->startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName()))));
+        }
+        @JavascriptInterface public void limits(boolean enabled) {
+            io.submit(()->AppLimits.setEnabled(MainActivity.this,enabled));
+        }
         @JavascriptInterface public void checkUpdate() { MainActivity.this.checkUpdate(true); }
         @JavascriptInterface public String save(String data) {
             try {
