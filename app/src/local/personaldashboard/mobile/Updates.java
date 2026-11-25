@@ -3,6 +3,8 @@ package local.personaldashboard.mobile;
 import android.content.*;
 import android.content.pm.*;
 import android.app.PendingIntent;
+import android.net.ConnectivityManager;
+import android.net.ProxyInfo;
 import android.os.Build;
 import java.io.*;
 import java.net.*;
@@ -12,8 +14,8 @@ import java.util.*;
 import org.json.*;
 
 final class Updates {
-    static final int VERSION=9;
-    static final String NAME="0.1.8";
+    static final int VERSION=10;
+    static final String NAME="0.1.9";
     static final String REPOSITORY="utlastr/personal-dashboard-android";
     static final String RELEASES="https://github.com/"+REPOSITORY+"/releases/";
     static final String API="https://api.github.com/repos/"+REPOSITORY+"/releases/";
@@ -49,6 +51,9 @@ final class Updates {
         return manifest;
     }
     static HttpURLConnection connect(String address) throws Exception {
+        return connect(null,address);
+    }
+    private static HttpURLConnection connect(Context context,String address) throws Exception {
         // GitHub redirects release assets to a signed HTTPS download host.
         for(int redirects=0;redirects<6;redirects++) {
             URL url=new URL(address);
@@ -62,13 +67,24 @@ final class Updates {
                 throw new IOException("更新仓库不匹配");
             if(host.equals("api.github.com") && !url.getPath().startsWith("/repos/"+REPOSITORY+"/releases/"))
                 throw new IOException("更新仓库不匹配");
-            HttpURLConnection connection=(HttpURLConnection)url.openConnection();
+            ConnectivityManager connectivity=context==null?null:context.getSystemService(ConnectivityManager.class);
+            ProxyInfo proxy=connectivity==null?null:connectivity.getDefaultProxy();
+            HttpURLConnection connection=(HttpURLConnection)(proxy!=null && proxy.getHost()!=null
+                && proxy.getPort()>0 && android.net.Uri.EMPTY.equals(proxy.getPacFileUrl()) && !Arrays.stream(proxy.getExclusionList())
+                    .anyMatch(pattern->matchesProxyExclusion(host,pattern))
+                ? url.openConnection(new Proxy(Proxy.Type.HTTP,InetSocketAddress.createUnresolved(proxy.getHost(),proxy.getPort())))
+                : url.openConnection());
             connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(15000); connection.setReadTimeout(30000);
             connection.setRequestProperty("User-Agent","PersonalDashboard/"+NAME);
             connection.setRequestProperty("Cache-Control","no-cache");
             connection.setRequestProperty("Accept",url.getPath().contains("/releases/assets/")?"application/octet-stream":"application/vnd.github+json");
-            int code=connection.getResponseCode();
+            int code;
+            try { code=connection.getResponseCode(); }
+            catch(IOException error) {
+                connection.disconnect();
+                throw new IOException("无法连接 "+host+"："+error.getMessage(),error);
+            }
             if(code==301 || code==302 || code==303 || code==307 || code==308) {
                 String location=connection.getHeaderField("Location"); connection.disconnect();
                 if(location==null) throw new IOException("更新重定向地址为空");
@@ -79,8 +95,13 @@ final class Updates {
         }
         throw new IOException("更新重定向次数过多");
     }
-    static JSONObject readJson(String address) throws Exception {
-        HttpURLConnection connection=connect(address);
+    private static boolean matchesProxyExclusion(String host,String pattern) {
+        String regex=Arrays.stream(pattern.split("\\*",-1)).map(java.util.regex.Pattern::quote)
+            .collect(java.util.stream.Collectors.joining(".*"));
+        return host.matches("(?i)"+regex);
+    }
+    static JSONObject readJson(Context context,String address) throws Exception {
+        HttpURLConnection connection=connect(context,address);
         try(InputStream input=connection.getInputStream(); ByteArrayOutputStream bytes=new ByteArrayOutputStream()) {
             byte[] buffer=new byte[4096]; int count;
             while((count=input.read(buffer))!=-1) {
@@ -91,7 +112,7 @@ final class Updates {
         } finally { connection.disconnect(); }
     }
     static JSONObject check(Context context) throws Exception {
-        JSONObject release=readJson(API+"latest");
+        JSONObject release=readJson(context,API+"latest");
         if(release.optBoolean("draft") || release.optBoolean("prerelease")) throw new IOException("当前没有正式更新");
         JSONArray assets=release.getJSONArray("assets");
         String manifestUrl="";
@@ -100,7 +121,7 @@ final class Updates {
             if("update-manifest.json".equals(asset.getString("name"))) manifestUrl=API+"assets/"+asset.getLong("id");
         }
         if(manifestUrl.isEmpty()) throw new IOException("GitHub 发布缺少更新清单");
-        JSONObject manifest=validateManifest(readJson(manifestUrl));
+        JSONObject manifest=validateManifest(readJson(context,manifestUrl));
         if(!("v"+manifest.getString("versionName")).equals(release.getString("tag_name")))
             throw new IOException("GitHub 发布标签与清单不匹配");
         for(int i=0;i<assets.length();i++) {
@@ -153,7 +174,7 @@ final class Updates {
         String address=manifest.getString("assetUrl");
         if(!address.startsWith(API+"assets/") || !address.substring((API+"assets/").length()).matches("[0-9]+"))
             throw new IOException("更新资源地址无效");
-        HttpURLConnection connection=connect(address);
+        HttpURLConnection connection=connect(context,address);
         try { return download(context,manifest,connection); } finally { connection.disconnect(); }
     }
     static File download(Context context,JSONObject manifest,HttpURLConnection connection) throws Exception {
