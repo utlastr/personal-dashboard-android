@@ -10,8 +10,26 @@ public final class AppLimitService extends AccessibilityService {
     private static volatile boolean active;
     private final Handler timer=new Handler(Looper.getMainLooper());
     private final Runnable check=this::enforce;
+    private boolean listening;
+    private final BroadcastReceiver wake=new BroadcastReceiver() {
+        public void onReceive(Context context,Intent intent) { enforce(); }
+    };
+    private final SharedPreferences.OnSharedPreferenceChangeListener preference=(prefs,key)->{
+        if("limitsEnabled".equals(key) && active) {
+            timer.removeCallbacks(check);
+            timer.post(check);
+        }
+    };
     static boolean connected() { return active; }
     public void onServiceConnected() {
+        if(!listening) {
+            IntentFilter filter=new IntentFilter(Intent.ACTION_USER_PRESENT);
+            filter.addAction(Intent.ACTION_SCREEN_OFF);
+            if(Build.VERSION.SDK_INT>=33) registerReceiver(wake,filter,Context.RECEIVER_NOT_EXPORTED);
+            else registerReceiver(wake,filter);
+            Collector.prefs(this).registerOnSharedPreferenceChangeListener(preference);
+            listening=true;
+        }
         active=true;
         enforce();
     }
@@ -24,13 +42,18 @@ public final class AppLimitService extends AccessibilityService {
             event.getEventType()==AccessibilityEvent.TYPE_WINDOWS_CHANGED) enforce();
     }
     private boolean block(String pkg) {
-        if(!AppLimits.enabled(this) || ((KeyguardManager)getSystemService(KEYGUARD_SERVICE)).isKeyguardLocked()) return false;
+        if(!ready()) return false;
         return AppLimits.restricted(pkg) && !AppLimits.allowed(pkg,java.time.ZonedDateTime.now())
             && performGlobalAction(GLOBAL_ACTION_HOME);
     }
+    private boolean ready() {
+        return active && AppLimits.enabled(this)
+            && ((PowerManager)getSystemService(POWER_SERVICE)).isInteractive()
+            && !((KeyguardManager)getSystemService(KEYGUARD_SERVICE)).isKeyguardLocked();
+    }
     private void enforce() {
         timer.removeCallbacks(check);
-        if(!AppLimits.enabled(this) || ((KeyguardManager)getSystemService(KEYGUARD_SERVICE)).isKeyguardLocked()) return;
+        if(!ready()) return;
         try {
             AccessibilityNodeInfo activeRoot=getRootInActiveWindow();
             if(activeRoot!=null) {
@@ -54,6 +77,15 @@ public final class AppLimitService extends AccessibilityService {
         }
     }
     public void onInterrupt() {}
-    public boolean onUnbind(Intent intent) { active=false; timer.removeCallbacksAndMessages(null); return super.onUnbind(intent); }
-    public void onDestroy() { active=false; timer.removeCallbacksAndMessages(null); super.onDestroy(); }
+    private void stopListening() {
+        active=false;
+        timer.removeCallbacksAndMessages(null);
+        if(listening) {
+            Collector.prefs(this).unregisterOnSharedPreferenceChangeListener(preference);
+            unregisterReceiver(wake);
+            listening=false;
+        }
+    }
+    public boolean onUnbind(Intent intent) { stopListening(); return super.onUnbind(intent); }
+    public void onDestroy() { stopListening(); super.onDestroy(); }
 }

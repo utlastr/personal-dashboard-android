@@ -279,6 +279,22 @@ public final class RuntimeTests extends Instrumentation {
                 &&output[0].contains("honest\\\":true")&&output[0].contains("bili\\\":true")&&output[0].contains("douyin\\\":true")
                 &&output[0].contains("overflow\\\":false"),"limit menu capability, hours and layout");
             screenshot(c,"verify-limit-menu.png");
+            CountDownLatch toggle=new CountDownLatch(1);
+            runOnMainSync(()->web.evaluateJavascript(
+                "(()=>{const input=document.querySelector('#limits-enabled'); const original=input.checked; input.click(); const changed=JSON.parse(Dashboard.state()).limits.enabled===!original && input.checked===!original; input.click(); return changed && JSON.parse(Dashboard.state()).limits.enabled===original && input.checked===original;})()",
+                value->{output[0]=value;toggle.countDown();}));
+            check(toggle.await(3,TimeUnit.SECONDS)&&"true".equals(output[0]),"limit toggle immediately persists both states");
+            runOnMainSync(web::reload);
+            boolean restored=false;
+            for(int i=0;i<20&&!restored;i++) {
+                CountDownLatch ready=new CountDownLatch(1);
+                runOnMainSync(()->web.evaluateJavascript(
+                    "document.querySelector('#week')?.getAttribute('aria-selected')==='true' && !!document.querySelector('#app-count')?.textContent",
+                    value->{output[0]=value;ready.countDown();}));
+                restored=ready.await(2,TimeUnit.SECONDS)&&"true".equals(output[0]);
+                if(!restored) Thread.sleep(200);
+            }
+            check(restored,"Week selection survives WebView reload");
             // Leave the real WebView on its homepage for visual verification.
             runOnMainSync(()->web.evaluateJavascript("document.querySelector('#device-dialog').close(); document.querySelector('#day').click();",null));
             result.putString("result","PASS: Day/Week totals, hourly/daily charts, DST, launcher filtering, overlap dedupe, legacy labels, sync, update job, APK integrity, WebView interactions");

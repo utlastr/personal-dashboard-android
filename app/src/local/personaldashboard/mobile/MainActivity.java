@@ -158,8 +158,10 @@ public final class MainActivity extends Activity {
             if(Build.VERSION.SDK_INT>=31)
                 runOnUiThread(()->startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+getPackageName()))));
         }
-        @JavascriptInterface public void limits(boolean enabled) {
-            io.submit(()->AppLimits.setEnabled(MainActivity.this,enabled));
+        @JavascriptInterface public boolean limits(boolean enabled) {
+            if(!AppLimits.saveEnabled(MainActivity.this,enabled)) return false;
+            sendBroadcast(new Intent(MainActivity.this,LimitReceiver.class));
+            return true;
         }
         @JavascriptInterface public void checkUpdate() { MainActivity.this.checkUpdate(true); }
         @JavascriptInterface public String save(String data) {

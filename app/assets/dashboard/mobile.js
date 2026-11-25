@@ -6,7 +6,15 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
   const today = () => localDate(Date.now());
-  let period = 'day', anchor = today(), state, selectedPackage, initialized = false, signature;
+  let period = 'day', pinnedDate = '', anchor, state, selectedPackage, initialized = false, signature;
+  try {
+    const saved = JSON.parse(localStorage.getItem('dashboard-view') || '{}');
+    if (saved?.period === 'week') period = 'week';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(saved?.date) && localDate(`${saved.date}T12:00:00`) === saved.date) pinnedDate = saved.date;
+  } catch (_) {}
+  function saveView() {
+    try { localStorage.setItem('dashboard-view', JSON.stringify({period, date: pinnedDate})); } catch (_) {}
+  }
   const duration = ms => {
     const minutes = Math.floor(ms / 60000);
     if (ms > 0 && minutes === 0) return '不足 1 分钟';
@@ -52,18 +60,22 @@
   }
   function render() {
     if (!bridge) { text('message', '此页面需要在 Personal Dashboard 安卓应用中打开'); $('message').hidden = false; return; }
+    anchor = pinnedDate && pinnedDate <= today() ? pinnedDate : today();
     try { state = JSON.parse(bridge.report(period, anchor)); }
     catch (_) { text('message', '暂时无法读取使用记录'); $('message').hidden = false; return; }
     if (!state.apps) { text('message', state.message || '暂时无法读取使用记录'); $('message').hidden = false; return; }
     text('device-name', state.name || '手机'); text('role-badge', state.role === 'work' ? '工作机' : '日常机');
     $('permission').hidden = !!state.permission;
     const limits = state.limits || {};
+    const accessStatus = limits.accessibility ? '时段拦截已连接，禁止时段打开将返回桌面。'
+      : limits.accessibilityGranted ? '无障碍已授权，但服务未连接；时段拦截暂未生效。'
+      : '系统未启用无障碍服务；时段拦截暂未生效。';
     $('limits-enabled').checked = limits.enabled !== false;
     $('limit-notice').hidden = !limits.enabled || limits.accessibility || (limits.canHide && limits.exact && !limits.error);
     text('limit-notice-text', limits.canHide ? '已启用时段隐藏；开启无障碍后可在结束时退出应用。' : '时段限制尚未生效：请开启无障碍权限。当前手机无法隐藏图标。');
     text('limit-status', !limits.enabled ? '已关闭时段限制' : limits.canHide
       ? `有隐藏权限，按手机时间隐藏或恢复图标。${limits.exact ? '' : '未允许精确闹钟，图标切换可能延迟。'}${limits.accessibility ? '时段拦截已连接。' : ''}`
-      : `没有隐藏权限，图标仍会显示。${limits.accessibility ? '时段拦截已连接，禁止时段打开将返回桌面。' : '无障碍未连接，暂时无法拦截。'}`);
+      : `没有隐藏权限，图标仍会显示。${accessStatus}`);
     $('limit-error').hidden = !limits.error; text('limit-error', limits.error || '');
     $('limit-alarm').hidden = !limits.enabled || !limits.canHide || limits.exact;
     $('message').hidden = !state.message; text('message', state.message || '');
@@ -115,11 +127,15 @@
       initialized = true;
     }
   }
-  for (const mode of ['day', 'week']) $(mode).onclick = () => { period = mode; render(); };
-  $('date').onchange = () => { if ($('date').value && $('date').value <= today()) { anchor = $('date').value; render(); } };
+  for (const mode of ['day', 'week']) $(mode).onclick = () => { period = mode; saveView(); render(); };
+  $('date').onchange = () => {
+    if ($('date').value && $('date').value <= today()) {
+      pinnedDate = $('date').value === today() ? '' : $('date').value; saveView(); render();
+    }
+  };
   function move(direction) {
     const d = new Date(`${anchor}T12:00:00`); d.setDate(d.getDate() + direction * (period === 'week' ? 7 : 1));
-    anchor = localDate(d); if (anchor > today()) anchor = today(); render();
+    const date = localDate(d); pinnedDate = date >= today() ? '' : date; saveView(); render();
   }
   $('previous').onclick = () => move(-1); $('next').onclick = () => move(1);
   $('detail-group').onchange = $('detail-metric').onchange = detail;
@@ -130,7 +146,11 @@
   $('grant').onclick = () => bridge?.permission();
   $('limit-grant').onclick = $('limit-access').onclick = () => bridge?.limitPermission();
   $('limit-alarm').onclick = () => bridge?.exactAlarmPermission();
-  $('limits-enabled').onchange = () => { bridge?.limits($('limits-enabled').checked); };
+  $('limits-enabled').onchange = () => {
+    const saved = bridge?.limits($('limits-enabled').checked);
+    render();
+    if (!saved) { text('limit-error', '时段限制开关未能保存'); $('limit-error').hidden = false; }
+  };
   $('refresh').onclick = () => { bridge?.refresh(); render(); };
   $('check-update').onclick = () => { bridge?.checkUpdate(); render(); };
   $('install').onclick = () => bridge?.install();

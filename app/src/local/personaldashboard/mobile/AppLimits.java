@@ -82,10 +82,13 @@ final class AppLimits {
         schedule(c);
     }
     static synchronized boolean setEnabled(Context c,boolean enabled) {
-        Collector.prefs(c).edit().putBoolean("limitsEnabled",enabled).commit();
+        if(!saveEnabled(c,enabled)) return false;
         apply(c);
         // A failed restore must stay visible instead of silently reporting disabled.
         return Collector.prefs(c).getString("limitError","").isEmpty();
+    }
+    static boolean saveEnabled(Context c,boolean enabled) {
+        return Collector.prefs(c).edit().putBoolean("limitsEnabled",enabled).commit();
     }
     static void schedule(Context c) {
         AlarmManager alarms=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
@@ -103,8 +106,14 @@ final class AppLimits {
     }
     static JSONObject state(Context c) throws JSONException {
         boolean hiding=canHide(c),access=AppLimitService.connected();
+        ComponentName service=new ComponentName(c,AppLimitService.class);
+        String services=android.provider.Settings.Secure.getString(c.getContentResolver(),
+            android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        boolean granted=services!=null && Arrays.stream(services.split(":"))
+            .anyMatch(id->service.equals(ComponentName.unflattenFromString(id)));
         AlarmManager alarms=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
         return new JSONObject().put("enabled",enabled(c)).put("canHide",hiding).put("accessibility",access)
+            .put("accessibilityGranted",granted || access)
             .put("exact",Build.VERSION.SDK_INT<31 || alarms.canScheduleExactAlarms())
             .put("error",Collector.prefs(c).getString("limitError",""))
             .put("hidden",new JSONArray(Collector.prefs(c).getStringSet("limitHidden",Collections.emptySet())))
