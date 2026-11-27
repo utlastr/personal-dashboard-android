@@ -257,22 +257,24 @@ public final class RuntimeTests extends Instrumentation {
             screenshot(c,"verify-day.png");
             CountDownLatch interaction=new CountDownLatch(1);
             runOnMainSync(()->web.evaluateJavascript(
-                "document.querySelector('#week').click(); document.querySelector('#apps .row').click(); document.querySelector('#detail-group').value='days'; document.querySelector('#detail-group').dispatchEvent(new Event('change')); JSON.stringify({open:document.querySelector('#app-detail').open,bars:document.querySelectorAll('#detail-chart .bar-column').length,packageCaption:!!document.querySelector('#apps small'),overflow:document.documentElement.scrollWidth>innerWidth})",
+                "document.querySelector('#week').click(); document.querySelector('#apps .row').click(); document.querySelector('#detail-group').value='days'; document.querySelector('#detail-group').dispatchEvent(new Event('change')); JSON.stringify({open:document.querySelector('#app-detail').open,bars:document.querySelectorAll('#detail-chart .bar-column').length,average:document.querySelector('#total-label').textContent==='Daily average',totalBelow:document.querySelector('#summary-chart').nextElementSibling.textContent.startsWith('Total screen time:'),stacked:!!document.querySelector('.app-meta strong + .duration'),packageCaption:!!document.querySelector('#apps small,#app-count'),overflow:document.documentElement.scrollWidth>innerWidth})",
                 value->{output[0]=value;interaction.countDown();}));
             interaction.await(3,TimeUnit.SECONDS);
             check(output[0]!=null && output[0].contains("open\\\":true") && output[0].contains("bars\\\":7"),"week app detail has seven daily bars");
+            check(output[0].contains("average\\\":true") && output[0].contains("totalBelow\\\":true")
+                && output[0].contains("stacked\\\":true"),"weekly summary and app duration layout");
             check(output[0].contains("packageCaption\\\":false") && output[0].contains("overflow\\\":false"),"clean labels and detail layout");
             screenshot(c,"verify-week-detail.png");
             CountDownLatch hourly=new CountDownLatch(1);
             runOnMainSync(()->web.evaluateJavascript(
-                "document.querySelector('#detail-group').value='hours'; document.querySelector('#detail-group').dispatchEvent(new Event('change')); document.querySelector('#detail-metric').value='frequency'; document.querySelector('#detail-metric').dispatchEvent(new Event('change')); JSON.stringify({bars:document.querySelectorAll('#detail-chart .bar-column').length,frequency:document.querySelector('#detail-chart button').getAttribute('aria-label').includes('次')})",
+                "document.querySelector('#detail-group').value='hours'; document.querySelector('#detail-group').dispatchEvent(new Event('change')); document.querySelector('#detail-metric').value='frequency'; document.querySelector('#detail-metric').dispatchEvent(new Event('change')); JSON.stringify({bars:document.querySelectorAll('#detail-chart .bar-column').length,frequency:document.querySelector('#detail-chart button').getAttribute('aria-label').includes('open')})",
                 value->{output[0]=value;hourly.countDown();}));
             hourly.await(3,TimeUnit.SECONDS);
             check(output[0]!=null && output[0].contains("bars\\\":24") && output[0].contains("frequency\\\":true"),"24 hour frequency detail");
             screenshot(c,"verify-hours-detail.png");
             CountDownLatch limitPanel=new CountDownLatch(1);
             runOnMainSync(()->web.evaluateJavascript(
-                "document.querySelector('#app-detail').close();document.querySelector('#connection').click();JSON.stringify({open:document.querySelector('#device-dialog').open,limits:!!document.querySelector('#limits-enabled'),honest:document.querySelector('#limit-status').textContent.includes('没有隐藏权限'),bili:document.querySelector('#device-dialog').textContent.includes('22:00–23:00'),douyin:document.querySelector('#device-dialog').textContent.includes('15:30–17:30'),overflow:document.documentElement.scrollWidth>innerWidth})",
+                "document.querySelector('#app-detail').close();document.querySelector('#connection').click();JSON.stringify({open:document.querySelector('#device-dialog').open,limits:!!document.querySelector('#limits-enabled'),honest:document.querySelector('#limit-status').textContent.includes('App icons remain visible.'),bili:document.querySelector('#device-dialog').textContent.includes('22:00–23:00'),douyin:document.querySelector('#device-dialog').textContent.includes('16:30–18:00'),overflow:document.documentElement.scrollWidth>innerWidth})",
                 value->{output[0]=value;limitPanel.countDown();}));
             limitPanel.await(3,TimeUnit.SECONDS);
             check(output[0]!=null&&output[0].contains("open\\\":true")&&output[0].contains("limits\\\":true")
@@ -289,7 +291,7 @@ public final class RuntimeTests extends Instrumentation {
             for(int i=0;i<20&&!restored;i++) {
                 CountDownLatch ready=new CountDownLatch(1);
                 runOnMainSync(()->web.evaluateJavascript(
-                    "document.querySelector('#week')?.getAttribute('aria-selected')==='true' && !!document.querySelector('#app-count')?.textContent",
+                    "document.querySelector('#week')?.getAttribute('aria-selected')==='true' && !!document.querySelector('#screen-time-total')?.textContent",
                     value->{output[0]=value;ready.countDown();}));
                 restored=ready.await(2,TimeUnit.SECONDS)&&"true".equals(output[0]);
                 if(!restored) Thread.sleep(200);

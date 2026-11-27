@@ -16,7 +16,7 @@ The PC overview displays the PC, work phone and personal phone side by side.
 
 Build output:
 
-`output/PersonalDashboard-0.1.9.apk` (Android 9+, ARM64 and x86_64)
+`output/PersonalDashboard-0.1.10.apk` (Android 9+, ARM64 and x86_64)
 
 The PC sync service is in `tools/mobile_service.py`. Data sync requires pairing.
 Updates are independent and use public GitHub Releases in
@@ -54,7 +54,7 @@ System home launchers are excluded from new collection and historical reports.
 App rows show their display names without package-name subtitles.
 
 Daily app limits are enabled by default: Bilibili 22:00 inclusive to 23:00
-exclusive; Douyin 15:30 inclusive to 17:30 exclusive, using phone local time.
+exclusive; Douyin 16:30 inclusive to 18:00 exclusive, using phone local time.
 The connected phone's `com.bilibili.app.in` variant is included.
 The device menu shows actual capabilities and an enable/disable checkbox.
 Ordinary phones require the user to enable the accessibility service once.

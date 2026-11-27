@@ -12,12 +12,15 @@ import org.json.*;
 final class AppLimits {
     static final String[] PACKAGES={"tv.danmaku.bili","com.bilibili.app.in","com.bilibili.app.blue",
         "tv.danmaku.bilibilihd","com.ss.android.ugc.aweme","com.ss.android.ugc.aweme.lite"};
-    private static final int[] BOUNDARIES={15*60+30,17*60+30,22*60,23*60};
+    private static final int DOUYIN_START=16*60+30, DOUYIN_END=18*60;
+    private static final int BILIBILI_START=22*60, BILIBILI_END=23*60;
+    private static final int[] BOUNDARIES={DOUYIN_START,DOUYIN_END,BILIBILI_START,BILIBILI_END};
     static boolean restricted(String pkg) { return Arrays.asList(PACKAGES).contains(pkg); }
     static boolean allowed(String pkg,ZonedDateTime now) {
         int minute=now.getHour()*60+now.getMinute();
         if(!restricted(pkg)) return true;
-        return pkg.startsWith("com.ss.android.")?minute>=930 && minute<1050:minute>=1320 && minute<1380;
+        return pkg.startsWith("com.ss.android.") ? minute>=DOUYIN_START && minute<DOUYIN_END
+            : minute>=BILIBILI_START && minute<BILIBILI_END;
     }
     static long nextBoundary(ZonedDateTime now) {
         for(int day=0;day<2;day++) for(int minute:BOUNDARIES) {
@@ -71,13 +74,13 @@ final class AppLimits {
                     }
                     if(hidden!=hide && !p.setApplicationHidden(admin,pkg,hide)) {
                         if(!tracked) managed.remove(pkg);
-                        throw new IllegalStateException("系统未允许修改 "+pkg);
+                        throw new IllegalStateException("Android denied the visibility change for "+pkg);
                     }
                     if(!hide) managed.remove(pkg);
                     prefs.edit().putStringSet("limitHidden",new HashSet<>(managed)).commit();
                 } catch(Exception failure) { error=failure.getMessage()==null?failure.toString():failure.getMessage(); }
             }
-        } else if(!managed.isEmpty()) error="隐藏权限已失效；请恢复原管理权限以还原已隐藏应用";
+        } else if(!managed.isEmpty()) error="Restore device management access to show apps hidden by Dashboard.";
         prefs.edit().putString("limitError",error).putLong("limitApplied",System.currentTimeMillis()).apply();
         schedule(c);
     }
@@ -109,11 +112,12 @@ final class AppLimits {
         ComponentName service=new ComponentName(c,AppLimitService.class);
         String services=android.provider.Settings.Secure.getString(c.getContentResolver(),
             android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        boolean granted=services!=null && Arrays.stream(services.split(":"))
+        boolean granted=android.provider.Settings.Secure.getInt(c.getContentResolver(),
+            android.provider.Settings.Secure.ACCESSIBILITY_ENABLED,0)==1 && services!=null && Arrays.stream(services.split(":"))
             .anyMatch(id->service.equals(ComponentName.unflattenFromString(id)));
         AlarmManager alarms=(AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
         return new JSONObject().put("enabled",enabled(c)).put("canHide",hiding).put("accessibility",access)
-            .put("accessibilityGranted",granted || access)
+            .put("accessibilityGranted",granted)
             .put("exact",Build.VERSION.SDK_INT<31 || alarms.canScheduleExactAlarms())
             .put("error",Collector.prefs(c).getString("limitError",""))
             .put("hidden",new JSONArray(Collector.prefs(c).getStringSet("limitHidden",Collections.emptySet())))

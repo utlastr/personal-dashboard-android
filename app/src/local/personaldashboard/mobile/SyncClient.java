@@ -11,12 +11,12 @@ final class SyncClient {
         URI uri=new URI(value.trim());
         if(uri.getHost()==null || uri.getUserInfo()!=null || uri.getQuery()!=null || uri.getFragment()!=null
             || !(uri.getScheme().equals("http")||uri.getScheme().equals("https"))
-            || !(uri.getPath().isEmpty()||uri.getPath().equals("/"))) throw new IllegalArgumentException("请输入完整的服务根地址");
+            || !(uri.getPath().isEmpty()||uri.getPath().equals("/"))) throw new IllegalArgumentException("Enter the full server base URL.");
         if(uri.getScheme().equals("http")) {
             String host=uri.getHost();
             if(!host.equals("localhost")&&!host.matches("127\\.\\d+\\.\\d+\\.\\d+")&&!host.matches("10\\.\\d+\\.\\d+\\.\\d+")
                 &&!host.matches("192\\.168\\.\\d+\\.\\d+")&&!host.matches("172\\.(1[6-9]|2\\d|3[01])\\.\\d+\\.\\d+"))
-                throw new IllegalArgumentException("公网连接必须使用 HTTPS");
+                throw new IllegalArgumentException("Public server addresses require HTTPS.");
         }
         return value.trim().replaceAll("/+$","");
     }
@@ -33,11 +33,11 @@ final class SyncClient {
                 try(OutputStream stream=connection.getOutputStream()) { stream.write(payload.toString().getBytes(StandardCharsets.UTF_8)); }
             }
             int code=connection.getResponseCode();
-            if(code!=200) throw new IOException("服务返回 "+code);
+            if(code!=200) throw new IOException("Server returned HTTP "+code);
             ByteArrayOutputStream output=new ByteArrayOutputStream();
             try(InputStream input=connection.getInputStream()) {
                 byte[] buffer=new byte[8192]; int length;
-                while((length=input.read(buffer))!=-1) { output.write(buffer,0,length); if(output.size()>4*1024*1024) throw new IOException("响应过大"); }
+                while((length=input.read(buffer))!=-1) { output.write(buffer,0,length); if(output.size()>4*1024*1024) throw new IOException("Server response is too large."); }
             }
             return new JSONObject(new String(output.toByteArray(),StandardCharsets.UTF_8));
         } finally { connection.disconnect(); }
@@ -51,7 +51,7 @@ final class SyncClient {
                 JSONObject response=request(context,"/mobile/v1/sync",new JSONObject().put("device",Collector.device(context))
                     .put("name",Collector.prefs(context).getString("name",android.os.Build.MODEL))
                     .put("role",Collector.prefs(context).getString("role","personal")).put("sessions",pending));
-                if(response.getInt("accepted")!=pending.length()) throw new IOException("同步数量未确认");
+                if(response.getInt("accepted")!=pending.length()) throw new IOException("The server did not confirm all synced records.");
                 for(int i=0;i<pending.length();i++) store.marked(pending.getJSONObject(i).getString("id"),"synced");
             } while(pending.length()==300);
         }

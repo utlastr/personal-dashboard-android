@@ -27,7 +27,7 @@ final class Collector {
         SharedPreferences p=prefs(c); long now=System.currentTimeMillis();
         long since=Math.max(now-7*86400000L,p.getLong("cursor",now-86400000L));
         UsageEvents events=((UsageStatsManager)c.getSystemService(Context.USAGE_STATS_SERVICE)).queryEvents(since,now);
-        if(events==null) throw new IllegalStateException("系统暂时未提供使用记录，请解锁后重试");
+        if(events==null) throw new IllegalStateException("Usage data is unavailable. Unlock the device and try again.");
         ArrayList<ForegroundParser.Event> raw=new ArrayList<>();
         UsageEvents.Event event=new UsageEvents.Event();
         while(events.hasNextEvent()) {
@@ -61,7 +61,7 @@ final class Collector {
         }
     }
     static void check(String response) throws Exception {
-        if(response==null) throw new IllegalStateException("数据引擎未响应");
+        if(response==null) throw new IllegalStateException("The data engine did not respond.");
         if(response.startsWith("{")) {
             JSONObject object=new JSONObject(response);
             if(object.has("error")) throw new IllegalStateException(object.optString("error"));

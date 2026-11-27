@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_limits_description">按每天开放时段限制应用：哔哩哔哩 22:00–23:00，抖音 15:30–17:30。禁止时段打开应用或到达结束时间时返回桌面。只识别前台应用包名，不读取或保存页面文字。无障碍权限不能隐藏应用图标；已有设备管理隐藏权限时另行隐藏。</string>
+    <string name="app_limits_label">Personal Dashboard App Limits</string>
+    <string name="app_limits_description">Daily access: Bilibili from 10:00 to 11:00 PM, Douyin from 4:30 to 6:00 PM. Opening a restricted app outside its hours or reaching the end time returns you to Home. The service checks the foreground app package and does not read or store screen text.</string>
 </resources>

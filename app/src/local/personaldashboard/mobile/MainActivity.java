@@ -86,13 +86,13 @@ public final class MainActivity extends Activity {
                             try {
                                 try(ServerSocket probe=new ServerSocket()) { probe.bind(new InetSocketAddress("127.0.0.1",5667)); }
                                 rust.startServer(5667);
-                            } catch(Throwable error) { operation="本机数据服务启动失败："+error.getMessage(); }
+                            } catch(Throwable error) { operation="Could not start the local data service: "+error.getMessage(); }
                             finally { started=false; }
                         },"ActivityWatch-server"); server.setDaemon(true); server.start();
                     }
                 }
                 refresh(false);
-            } catch(Throwable error) { operation="数据引擎启动失败："+error.getMessage(); }
+            } catch(Throwable error) { operation="Could not start the data engine: "+error.getMessage(); }
         });
     }
     private boolean trusted(Uri uri) {
@@ -168,12 +168,12 @@ public final class MainActivity extends Activity {
             try {
                 JSONObject config=new JSONObject(data);
                 String role=config.getString("role");
-                if(!role.equals("work")&&!role.equals("personal")) throw new IllegalArgumentException("设备用途无效");
+                if(!role.equals("work")&&!role.equals("personal")) throw new IllegalArgumentException("Choose a valid device role.");
                 String server=config.optString("server").trim();
                 if(!server.isEmpty()) server=SyncClient.validate(server);
                 SharedPreferences p=Collector.prefs(MainActivity.this);
                 String token=config.optString("token").trim();
-                if(token.isEmpty() && !server.equals(p.getString("server",""))) throw new IllegalArgumentException("更换服务地址时需要重新输入配对码");
+                if(token.isEmpty() && !server.equals(p.getString("server",""))) throw new IllegalArgumentException("Enter the pairing code for the new server address.");
                 SharedPreferences.Editor editor=p.edit().putString("role",role).putString("name",config.getString("name"))
                     .putString("server",server);
                 if(!token.isEmpty()) editor.putString("token",token);
@@ -219,7 +219,7 @@ public final class MainActivity extends Activity {
                         Intent share=new Intent(Intent.ACTION_SEND).setType("application/json").putExtra(Intent.EXTRA_STREAM,uri)
                             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         share.setClipData(ClipData.newRawUri("Personal Dashboard",uri));
-                        startActivity(Intent.createChooser(share,"导出使用记录"));
+                        startActivity(Intent.createChooser(share,"Export usage"));
                     });
                 } catch(Exception error) { operation=error.getMessage(); }
             });

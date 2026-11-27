@@ -14,8 +14,8 @@ import java.util.*;
 import org.json.*;
 
 final class Updates {
-    static final int VERSION=10;
-    static final String NAME="0.1.9";
+    static final int VERSION=11;
+    static final String NAME="0.1.10";
     static final String REPOSITORY="utlastr/personal-dashboard-android";
     static final String RELEASES="https://github.com/"+REPOSITORY+"/releases/";
     static final String API="https://api.github.com/repos/"+REPOSITORY+"/releases/";
@@ -47,7 +47,7 @@ final class Updates {
             || manifest.getInt("versionCode")<1 || manifest.getString("versionName").isEmpty()
             || !manifest.getString("sha256").matches("[0-9a-fA-F]{64}")
             || !manifest.getString("apk").matches("PersonalDashboard-[0-9A-Za-z._-]+\\.apk"))
-            throw new IOException("GitHub 更新清单格式无效");
+            throw new IOException("Invalid GitHub update manifest.");
         return manifest;
     }
     static HttpURLConnection connect(String address) throws Exception {
@@ -62,11 +62,11 @@ final class Updates {
                 || (url.getPort()!=-1 && url.getPort()!=443)
                 || !(host.equals("github.com") || host.equals("api.github.com") || host.equals("release-assets.githubusercontent.com")
                     || host.equals("objects.githubusercontent.com") || host.equals("releases.githubusercontent.com")))
-                throw new IOException("更新下载地址不受信任");
+                throw new IOException("Untrusted update download URL.");
             if(host.equals("github.com") && !url.getPath().startsWith("/"+REPOSITORY+"/releases/"))
-                throw new IOException("更新仓库不匹配");
+                throw new IOException("Update repository mismatch.");
             if(host.equals("api.github.com") && !url.getPath().startsWith("/repos/"+REPOSITORY+"/releases/"))
-                throw new IOException("更新仓库不匹配");
+                throw new IOException("Update repository mismatch.");
             ConnectivityManager connectivity=context==null?null:context.getSystemService(ConnectivityManager.class);
             ProxyInfo proxy=connectivity==null?null:connectivity.getDefaultProxy();
             HttpURLConnection connection=(HttpURLConnection)(proxy!=null && proxy.getHost()!=null
@@ -83,17 +83,17 @@ final class Updates {
             try { code=connection.getResponseCode(); }
             catch(IOException error) {
                 connection.disconnect();
-                throw new IOException("无法连接 "+host+"："+error.getMessage(),error);
+                throw new IOException("Could not connect to "+host+": "+error.getMessage(),error);
             }
             if(code==301 || code==302 || code==303 || code==307 || code==308) {
                 String location=connection.getHeaderField("Location"); connection.disconnect();
-                if(location==null) throw new IOException("更新重定向地址为空");
+                if(location==null) throw new IOException("Update redirect has no destination.");
                 address=new URL(url,location).toString(); continue;
             }
             if(code!=200) { connection.disconnect(); throw new IOException("GitHub HTTP "+code); }
             return connection;
         }
-        throw new IOException("更新重定向次数过多");
+        throw new IOException("Too many update redirects.");
     }
     private static boolean matchesProxyExclusion(String host,String pattern) {
         String regex=Arrays.stream(pattern.split("\\*",-1)).map(java.util.regex.Pattern::quote)
@@ -106,33 +106,33 @@ final class Updates {
             byte[] buffer=new byte[4096]; int count;
             while((count=input.read(buffer))!=-1) {
                 bytes.write(buffer,0,count);
-                if(bytes.size()>1024*1024) throw new IOException("更新清单过大");
+                if(bytes.size()>1024*1024) throw new IOException("Update manifest is too large.");
             }
             return new JSONObject(new String(bytes.toByteArray(),StandardCharsets.UTF_8).replace("\uFEFF",""));
         } finally { connection.disconnect(); }
     }
     static JSONObject check(Context context) throws Exception {
         JSONObject release=readJson(context,API+"latest");
-        if(release.optBoolean("draft") || release.optBoolean("prerelease")) throw new IOException("当前没有正式更新");
+        if(release.optBoolean("draft") || release.optBoolean("prerelease")) throw new IOException("No stable update is available.");
         JSONArray assets=release.getJSONArray("assets");
         String manifestUrl="";
         for(int i=0;i<assets.length();i++) {
             JSONObject asset=assets.getJSONObject(i);
             if("update-manifest.json".equals(asset.getString("name"))) manifestUrl=API+"assets/"+asset.getLong("id");
         }
-        if(manifestUrl.isEmpty()) throw new IOException("GitHub 发布缺少更新清单");
+        if(manifestUrl.isEmpty()) throw new IOException("The GitHub release has no update manifest.");
         JSONObject manifest=validateManifest(readJson(context,manifestUrl));
         if(!("v"+manifest.getString("versionName")).equals(release.getString("tag_name")))
-            throw new IOException("GitHub 发布标签与清单不匹配");
+            throw new IOException("GitHub release tag and update manifest do not match.");
         for(int i=0;i<assets.length();i++) {
             JSONObject asset=assets.getJSONObject(i);
             if(manifest.getString("apk").equals(asset.getString("name")))
                 manifest.put("assetUrl",API+"assets/"+asset.getLong("id"));
         }
-        if(!manifest.has("assetUrl")) throw new IOException("GitHub 发布缺少安装包");
+        if(!manifest.has("assetUrl")) throw new IOException("The GitHub release has no APK.");
         if(manifest.getInt("versionCode")<=VERSION)
-            return manifest.put("status","已是最新版本 "+NAME).put("available",false);
-        return manifest.put("available",true).put("status","发现新版本 "+manifest.getString("versionName"));
+            return manifest.put("status","Up to date ("+NAME+").").put("available",false);
+        return manifest.put("available",true).put("status","Update available: "+manifest.getString("versionName"));
     }
     static boolean run(Context context,boolean force) {
         synchronized(Updates.class) { if(busy) return true; busy=true; }
@@ -141,12 +141,12 @@ final class Updates {
             long now=System.currentTimeMillis();
             if(!force && !due(now,prefs.getLong("updateChecked",0),prefs.getLong("updateAttempted",0))) return true;
             prefs.edit().putLong("updateAttempted",now).commit();
-            status(context,"正在检查 GitHub 版本…");
+            status(context,"Checking GitHub for updates...");
             JSONObject manifest=check(context);
             if(manifest.optBoolean("available") && state(context).optInt("versionCode")==manifest.getInt("versionCode")) {
                 int sessionId=prefs.getInt("updateSession",-1);
                 if(sessionId>=0 && context.getPackageManager().getPackageInstaller().getSessionInfo(sessionId)!=null) {
-                    status(context,state(context).optBoolean("needsAction")?"新版已下载；安卓系统要求确认安装":"正在安装更新…");
+                    status(context,state(context).optBoolean("needsAction")?"Update downloaded. Android requires installation confirmation.":"Installing update...");
                     prefs.edit().putLong("updateChecked",now).commit();
                     return true;
                 }
@@ -154,14 +154,14 @@ final class Updates {
             save(context,manifest);
             prefs.edit().putLong("updateChecked",now).commit();
             if(manifest.optBoolean("available")) {
-                status(context,"正在自动下载 "+manifest.getString("versionName")+"…");
+                status(context,"Downloading "+manifest.getString("versionName")+"...");
                 download(context,manifest);
-                save(context,manifest.put("ready",true).put("status","安装包已校验，准备更新"));
+                save(context,manifest.put("ready",true).put("status","Update verified and ready to install."));
                 requestInstall(context);
             }
             return true;
         } catch(Exception error) {
-            status(context,"更新失败："+error.getMessage()+"；稍后自动重试，也可手动检查");
+            status(context,"Update failed. "+error.getMessage()+" Dashboard will retry in the background. You can also check manually.");
             Collector.prefs(context).edit().putLong("updateChecked",0).commit();
             return false;
         } finally { synchronized(Updates.class) { busy=false; } }
@@ -170,10 +170,10 @@ final class Updates {
     static File download(Context context,JSONObject manifest) throws Exception {
         validateManifest(manifest);
         String tag="v"+manifest.getString("versionName");
-        if(!tag.matches("v[0-9A-Za-z._-]+")) throw new IOException("更新版本名称无效");
+        if(!tag.matches("v[0-9A-Za-z._-]+")) throw new IOException("Invalid update version.");
         String address=manifest.getString("assetUrl");
         if(!address.startsWith(API+"assets/") || !address.substring((API+"assets/").length()).matches("[0-9]+"))
-            throw new IOException("更新资源地址无效");
+            throw new IOException("Invalid update asset URL.");
         HttpURLConnection connection=connect(context,address);
         try { return download(context,manifest,connection); } finally { connection.disconnect(); }
     }
@@ -184,13 +184,13 @@ final class Updates {
             byte[] buffer=new byte[65536]; int count;
             while((count=input.read(buffer))!=-1) {
                 if(Thread.currentThread().isInterrupted()) throw new InterruptedIOException();
-                total+=count; if(total>400*1024*1024L) throw new IOException("安装包过大");
+                total+=count; if(total>400*1024*1024L) throw new IOException("The update APK is too large.");
                 target.write(buffer,0,count);
             }
         }
         verify(context,manifest,partial);
         File output=file(context);
-        if(!partial.renameTo(output)) throw new IOException("无法保存已校验的安装包");
+        if(!partial.renameTo(output)) throw new IOException("Could not save the verified APK.");
         return output;
     }
     static void verify(Context context,JSONObject manifest,File apk) throws Exception {
@@ -201,7 +201,7 @@ final class Updates {
         }
         StringBuilder hash=new StringBuilder();
         for(byte b:digest.digest()) hash.append(String.format(Locale.ROOT,"%02x",b&255));
-        if(!hash.toString().equalsIgnoreCase(manifest.getString("sha256"))) throw new IOException("安装包完整性校验失败");
+        if(!hash.toString().equalsIgnoreCase(manifest.getString("sha256"))) throw new IOException("APK integrity check failed.");
         PackageManager pm=context.getPackageManager();
         PackageInfo next=pm.getPackageArchiveInfo(apk.getAbsolutePath(),PackageManager.GET_SIGNING_CERTIFICATES);
         PackageInfo current=pm.getPackageInfo(context.getPackageName(),PackageManager.GET_SIGNING_CERTIFICATES);
@@ -209,13 +209,13 @@ final class Updates {
             || next.getLongVersionCode()!=manifest.getLong("versionCode")
             || next.signingInfo==null || current.signingInfo==null
             || !Arrays.equals(next.signingInfo.getApkContentsSigners(),current.signingInfo.getApkContentsSigners()))
-            throw new IOException("更新包名称、版本或签名不匹配");
+            throw new IOException("Update package name, version, or signature does not match.");
     }
     static void requestInstall(Context context) throws Exception {
         JSONObject manifest=state(context);
         if(!manifest.optBoolean("ready") || !manifest.optBoolean("available")) return;
         if(!context.getPackageManager().canRequestPackageInstalls()) {
-            save(context,manifest.put("status","新版已下载；需要允许本应用安装更新").put("permissionRequired",true));
+            save(context,manifest.put("status","Update downloaded. Allow Dashboard to install updates.").put("permissionRequired",true));
             return;
         }
         PackageInstaller installer=context.getPackageManager().getPackageInstaller();
@@ -238,12 +238,12 @@ final class Updates {
             PendingIntent pending=PendingIntent.getBroadcast(context,id,callback,
                 PendingIntent.FLAG_UPDATE_CURRENT|(Build.VERSION.SDK_INT>=31?PendingIntent.FLAG_MUTABLE:0));
             prefs.edit().putInt("updateSession",id).remove("updateAction").commit();
-            save(context,manifest.put("status","正在安装更新…").put("permissionRequired",false).put("needsAction",false));
+            save(context,manifest.put("status","Installing update...").put("permissionRequired",false).put("needsAction",false));
             session.commit(pending.getIntentSender()); committed=true;
         } finally { if(!committed) { installer.abandonSession(id); prefs.edit().remove("updateSession").commit(); } }
     }
     static void replaced(Context context) {
         Collector.prefs(context).edit().remove("updateSession").remove("updateAction").remove("updateState").commit();
-        status(context,"已更新至 "+NAME);
+        status(context,"Updated to "+NAME+".");
     }
 }

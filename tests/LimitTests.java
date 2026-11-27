@@ -35,14 +35,15 @@ public final class LimitTests extends Instrumentation {
         for(int minute=0;minute<1440;minute++) {
             check(AppLimits.allowed("tv.danmaku.bili",time(minute))==(minute>=1320&&minute<1380),"Bilibili minute "+minute);
             check(AppLimits.allowed("com.bilibili.app.in",time(minute))==(minute>=1320&&minute<1380),"installed Bilibili variant");
-            check(AppLimits.allowed("com.ss.android.ugc.aweme",time(minute))==(minute>=930&&minute<1050),"Douyin minute "+minute);
+            check(AppLimits.allowed("com.ss.android.ugc.aweme",time(minute))==(minute>=990&&minute<1080),"Douyin minute "+minute);
+            check(AppLimits.allowed("com.ss.android.ugc.aweme.lite",time(minute))==(minute>=990&&minute<1080),"Douyin Lite minute "+minute);
             check(AppLimits.allowed("com.android.settings",time(minute)),"unrelated app must stay allowed");
             check(AppLimits.nextBoundary(time(minute))>time(minute).toInstant().toEpochMilli(),"next alarm strictly future");
         }
-        check(AppLimits.nextBoundary(time(1380))==time(930).plusDays(1).toInstant().toEpochMilli(),"daily rollover");
+        check(AppLimits.nextBoundary(time(1380))==time(990).plusDays(1).toInstant().toEpochMilli(),"daily rollover");
         for(String zone:new String[]{"Asia/Shanghai","America/New_York"}) {
             ZonedDateTime dst=LocalDate.of(2026,11,1).atTime(23,1).atZone(ZoneId.of(zone));
-            check(AppLimits.nextBoundary(dst)==dst.toLocalDate().plusDays(1).atTime(15,30).atZone(dst.getZone()).toInstant().toEpochMilli(),"zone boundary");
+            check(AppLimits.nextBoundary(dst)==dst.toLocalDate().plusDays(1).atTime(16,30).atZone(dst.getZone()).toInstant().toEpochMilli(),"zone boundary");
         }
         LimitJob.schedule(c);
         android.app.job.JobInfo job=((android.app.job.JobScheduler)c.getSystemService(Context.JOB_SCHEDULER_SERVICE)).getPendingJob(8103);
@@ -68,11 +69,11 @@ public final class LimitTests extends Instrumentation {
             AppLimits.apply(c,time(600));
             check(p.isApplicationHidden(admin,bili)&&p.isApplicationHidden(admin,douyin),"both hidden outside hours");
             check(!launchable(c,bili)&&!launchable(c,douyin),"both absent from all-apps launcher query");
-            AppLimits.apply(c,time(930));
-            check(p.isApplicationHidden(admin,bili)&&!p.isApplicationHidden(admin,douyin),"15:30 only Douyin restored");
+            AppLimits.apply(c,time(990));
+            check(p.isApplicationHidden(admin,bili)&&!p.isApplicationHidden(admin,douyin),"16:30 only Douyin restored");
             check(launchable(c,douyin),"Douyin icon restored");
-            AppLimits.apply(c,time(1050));
-            check(p.isApplicationHidden(admin,douyin),"17:30 Douyin hidden");
+            AppLimits.apply(c,time(1080));
+            check(p.isApplicationHidden(admin,douyin),"18:00 Douyin hidden");
             AppLimits.apply(c,time(1320));
             check(!p.isApplicationHidden(admin,bili)&&p.isApplicationHidden(admin,douyin),"22:00 only Bilibili restored");
             AppLimits.apply(c,time(1380));
@@ -106,8 +107,8 @@ public final class LimitTests extends Instrumentation {
             try {
                 shell(ui,"settings put global auto_time 0");
                 for(String target:new String[]{"tv.danmaku.bili","com.ss.android.ugc.aweme"}) {
-                    String open=target.equals("tv.danmaku.bili")?"22:59:50":"17:29:50";
-                    String close=target.equals("tv.danmaku.bili")?"23:00:00":"17:30:00";
+                    String open=target.equals("tv.danmaku.bili")?"22:59:50":"17:59:50";
+                    String close=target.equals("tv.danmaku.bili")?"23:00:00":"18:00:00";
                     shell(ui,"su 0 date -s "+open);
                     shell(ui,"am start -W -n "+target+"/fixture.LimitActivity");
                     Thread.sleep(700);
@@ -143,6 +144,7 @@ public final class LimitTests extends Instrumentation {
         check(launchable(c,pkg),"ordinary phone icon remains visible");
         // Disabled limits must not affect launches even outside the window.
         AppLimits.setEnabled(c,false);
+        Thread.sleep(600); // Let an already-dispatched Home action complete.
         shell(ui,"am start -W -n "+pkg+"/fixture.LimitActivity");
         Thread.sleep(1000);
         top=shell(ui,"dumpsys activity activities");
